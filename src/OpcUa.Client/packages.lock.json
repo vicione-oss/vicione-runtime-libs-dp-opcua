@@ -1,0 +1,84 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "OPCFoundation.NetStandard.Opc.Ua.Client": {
+        "type": "Direct",
+        "requested": "[1.5.375.457, )",
+        "resolved": "1.5.375.457",
+        "contentHash": "wzc7Jx7GVnxM3lPQpZaU4C+u13Jm5Rg/DRGdTJIFQCTW8M6C8J0CNU2f+9wcY4ajGYhD/cbBGy9tIIwf8hPpGA==",
+        "dependencies": {
+          "OPCFoundation.NetStandard.Opc.Ua.Configuration": "1.5.375.457",
+          "OPCFoundation.NetStandard.Opc.Ua.Core": "1.5.375.457"
+        }
+      },
+      "ViciOne.Suite.DataPort": {
+        "type": "Direct",
+        "requested": "[0.32.0, )",
+        "resolved": "0.32.0",
+        "contentHash": "xFJKSmxkPwlXPQcdouNDdbmaJTdFZkVjZmSn2kHVP4YQFUe3n4p7DZRkxUPsyk7ls0jf7G9RHMXqxqxvsKS71w==",
+        "dependencies": {
+          "ViciOne.ManagedEngine.Contracts": "1.0.0"
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.3",
+        "contentHash": "bwGMrRcAMWx2s/RDgja97p27rxSz2pEQW0+rX5cWAUWVETVJ/eyxGfjAl8vuG5a+lckWmPIE+vcuaZNVB5YDdw=="
+      },
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.3",
+        "contentHash": "lxl0WLk7ROgBFAsjcOYjQ8/DVK+VMszxGBzUhgtQmAsTNldLL5pk9NG/cWTsXHq0lUhUEAtZkEE7jOGOA8bGKQ==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.3"
+        }
+      },
+      "Newtonsoft.Json": {
+        "type": "Transitive",
+        "resolved": "13.0.3",
+        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
+      },
+      "OPCFoundation.NetStandard.Opc.Ua.Configuration": {
+        "type": "Transitive",
+        "resolved": "1.5.375.457",
+        "contentHash": "i+iFqjSwPMOQ5g1yJVMMXVLG54lsVUj7HPqbRAQxdm04UZ8uGNt59aF9BpkcBpYzNXSHoVUocZfuVeAcUCIj+A==",
+        "dependencies": {
+          "OPCFoundation.NetStandard.Opc.Ua.Core": "1.5.375.457"
+        }
+      },
+      "OPCFoundation.NetStandard.Opc.Ua.Core": {
+        "type": "Transitive",
+        "resolved": "1.5.375.457",
+        "contentHash": "u9aLQBTgZv1T4i2z/AXrAlfALIEG4DUHnIlDTzQox0aJ2pWSm4uyJBMZs/90AFveLHvtrHYU2iozNzYWP0Sopg==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.1",
+          "Newtonsoft.Json": "13.0.3",
+          "OPCFoundation.NetStandard.Opc.Ua.Security.Certificates": "1.5.375.457"
+        }
+      },
+      "OPCFoundation.NetStandard.Opc.Ua.Security.Certificates": {
+        "type": "Transitive",
+        "resolved": "1.5.375.457",
+        "contentHash": "+kYvuS99heA4bJxtRyBqwlW2EfVuqK5e1wKG9tMP2QaEqRVJpc2L6smueDcyT04NgWMIdnQvWTiLhazoZi4ZHQ=="
+      },
+      "ViciOne.ManagedEngine.Contracts": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "ZgFz7ZsM/2eZVAQIHoZU4P2YOJChGIgkm2MY6qT2wZkBpAgY/Gh09nvfMa8jYXfFdQJiJebNstpfnoFFn71deA==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.3",
+          "ViciOne.ManagedEngine.Serialization": "1.0.0"
+        }
+      },
+      "ViciOne.ManagedEngine.Serialization": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "8ZwPSnqDn3lZODdhK2/7Qe54yNEWt3XIxmVDAd5IK86+OjsU3gSCcZdMOo1Zq2aqWja4KtlSzgvj3hQfMqiisQ=="
+      }
+    },
+    "net10.0/linux-arm64": {},
+    "net10.0/linux-x64": {},
+    "net10.0/win-x64": {}
+  }
+}

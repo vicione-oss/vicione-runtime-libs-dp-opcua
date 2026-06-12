@@ -1,0 +1,358 @@
+Common:
+  Target       : DataPort                                                                          # required: Id String to identify the target of the file
+  ContentType  : Rules                                                                             # required: Id String to identify the content of the file
+  Version      : 0.32.0                                                                            # required: Version of the file
+  Date         : 2026-05-11                                                                        # required: Date of the file
+  Description  : "OPC-UA Server DataPort"                                                          # required: Description of the file
+  Author       : "ifm software gmbh"                                                               # required: Author of the file
+  MetadataType : YAML                                                                              # required: Metadata type of the file (YAML, JSON, XML, Text, Binary, ...)
+  Namespace    : "ViciOne.DataPort.OpcUa.Server"                                                   # required: Namespace of the DataPort
+
+Root:
+  Id                       : "OpcUaServerDataPort"                                                 # required: Id String to identify the root of the DataPort
+  Name                     : "OPC-UA Server"                                                       # required: display name of the DataPort
+  Description              : "Server DataPort for OPC-UA"                                          # required: display description of the DataPort
+  Icon                     : opcua-server                                                          # required: just one Icon for the DataPort
+  ChildNodes               :
+    - Id                   : OPCUA-Server
+      MaxDepth             : 64
+      MaxInstances         : 8
+
+Nodes:
+
+  # -------------------- OPCUA-Server ------------------------------------
+
+  - Id                     : OPCUA-Server
+    Type                   : DataPortNode
+    Name                   : "Server"
+    Description            : "Server"
+    MetadataLength         : 0
+    Icon                   : server
+    TransferDirections     : [ Outbound, Inbound ]
+    ChildNodes             :
+      - Id                 : Folder
+        Required           : true
+    PropertyCategories     :
+      - Id                 : Connection
+        Properties         :
+          - Id             : ApplicationName
+            Required       : true
+          - Id             : ApplicationUri
+            Required       : true
+          - Id             : Namespace
+            Required       : true
+          - Id             : Server
+            Required       : true
+          - Id             : Port
+            Required       : true
+          - Id             : Endpoint
+            Required       : true
+          - Id             : TransportQuotas
+          - Id             : SecurityPolicy
+            Required       : true
+      - Id                 : Authentication
+        Properties         :
+          - Id             : UserAuthenticationType
+            Required       : true
+          - Id             : User
+          - Id             : Password
+      - Id                 : Certificate
+        Properties         :
+          - Id             : ApplicationCertificateSubject
+            Required       : true
+          - Id             : ApplicationCertificatesStoreType
+            Required       : true
+          - Id             : ApplicationCertificatesStorePath
+            Required       : true
+          - Id             : TrustedCertificatesStoreType
+          - Id             : TrustedCertificatesStorePath
+          - Id             : TrustedIssuerCertificatesStoreType
+          - Id             : TrustedIssuerCertificatesStorePath
+          - Id             : AutoAcceptUntrustedCertificates
+
+  # -------------------- Folder ------------------------------------------
+
+  - Id                     : Folder
+    MappingId              : Folder
+    Type                   : DataPortTreeNode
+    Name                   : "Folder"
+    Description            : "Folder in the OPC-UA Topic Tree"
+    Icon                   : folder
+    TransferModes          : [ None ]
+    ChildNodes             :
+      - Id                 : Folder
+      - Id                 : DataPointBool
+      - Id                 : DataPointInteger
+      - Id                 : DataPointFloat
+      - Id                 : DataPointDateTime
+      - Id                 : DataPointString
+      - Id                 : DataPointBinary
+
+  # -------------------- DataPoints --------------------------------------
+
+  - Id                     : DataPointBool
+    MappingId              : Variable
+    Type                   : DataPortTreeNode
+    Name                   : "DataPoint Bool"
+    Description            : "Boolean data point in the OPC-UA tree"
+    Icon                   : datapoint
+    TransferModes          : [ OnChange, Periodic, None ]
+    DataTypes              : [ Bool ]
+    PropertyCategories     :
+      - Id                 : Other
+        Properties         :
+          - Id             : ReadOnly
+
+  - Id                     : DataPointInteger
+    MappingId              : Variable
+    Type                   : DataPortTreeNode
+    Name                   : "DataPoint Integer"
+    Description            : "Integer data point in the OPC-UA tree"
+    Icon                   : datapoint
+    TransferModes          : [ OnChange, Periodic, None ]
+    DataTypes              : [ Int32, Int64, Int16, Int8, UInt32, UInt64, UInt16, UInt8 ]
+    PropertyCategories     :
+      - Id                 : Other
+        Properties         :
+          - Id             : ReadOnly
+
+  - Id                     : DataPointFloat
+    MappingId              : Variable
+    Type                   : DataPortTreeNode
+    Name                   : "DataPoint Float"
+    Description            : "Float data point in the OPC-UA tree"
+    Icon                   : datapoint
+    TransferModes          : [ OnChange, Periodic, None ]
+    DataTypes              : [ Float64, Float32 ]
+    PropertyCategories     :
+      - Id                 : Other
+        Properties         :
+          - Id             : ReadOnly
+
+  - Id                     : DataPointDateTime
+    MappingId              : Variable
+    Type                   : DataPortTreeNode
+    Name                   : "DataPoint DateTime"
+    Description            : "DateTime data point in the OPC-UA tree"
+    Icon                   : datapoint
+    TransferModes          : [ OnChange, Periodic, None ]
+    DataTypes              : [ DateTime ]
+    PropertyCategories     :
+      - Id                 : Other
+        Properties         :
+          - Id             : ReadOnly
+
+  - Id                     : DataPointString
+    MappingId              : Variable
+    Type                   : DataPortTreeNode
+    Name                   : "DataPoint String"
+    Description            : "String data point in the OPC-UA tree"
+    Icon                   : datapoint
+    TransferModes          : [ OnChange, Periodic, None ]
+    DataTypes              : [ String ]
+    PropertyCategories     :
+      - Id                 : Other
+        Properties         :
+          - Id             : ReadOnly
+
+  - Id                     : DataPointBinary
+    MappingId              : Variable
+    Type                   : DataPortTreeNode
+    Name                   : "DataPoint Binary"
+    Description            : "Binary data point in the OPC-UA tree"
+    Icon                   : datapoint
+    TransferModes          : [ OnChange, Periodic, None ]
+    DataTypes              : [ Binary ]
+    PropertyCategories     :
+      - Id                 : Other
+        Properties         :
+          - Id             : ReadOnly
+
+PropertyCategories:
+  - Id          : Connection
+    Name        : "Connection"
+    Description : "Connection properties"
+
+  - Id          : Authentication
+    Name        : "Authentication"
+    Description : "Authentication properties"
+
+  - Id          : Certificate
+    Name        : "Certificate"
+    Description : "Certificate properties"
+
+  - Id          : Other
+    Name        : "Other"
+    Description : "Other properties"
+
+Properties:
+  - Id          : ApplicationName
+    Name        : "Application Name"
+    Description : "The name of the application"
+    DataType    : String
+    UiControl   : TextBox
+    DefaultValue: "OPC-UA Server"
+
+  - Id          : ApplicationUri
+    Name        : "Application URI"
+    Description : "The URI of the application"
+    DataType    : String
+    UiControl   : TextBox
+    DefaultValue: "urn:localhost:OPCUA:Server"
+
+  - Id          : Namespace
+    Name        : "Namespace"
+    Description : "The namespace of the OPC-UA server"
+    DataType    : String
+    UiControl   : TextBox
+    DefaultValue: "http://ifm.com/ViciOne-suite"
+
+  - Id          : Server
+    Name        : "Server"
+    Description : "The server of the OPC-UA server"
+    DataType    : String
+    UiControl   : TextBox
+    DefaultValue: "0.0.0.0"
+
+  - Id          : Port
+    Name        : "Port"
+    Description : "The port of the OPC-UA server"
+    DataType    : Int32
+    UiControl   : NumericUpDown
+    DefaultValue: 4840
+    MinValue    : 0
+    MaxValue    : 65535
+
+  - Id          : Endpoint
+    Name        : "Endpoint"
+    Description : "The endpoint of the OPC-UA server"
+    DataType    : String
+    UiControl   : TextBox
+    DefaultValue: "ua/dataport"
+
+  - Id                 : UserAuthenticationType
+    Name               : "User Authentication Type"
+    Description        : "The type of user authentication."
+    DataType           : UInt8
+    UiControl          : NumericListBox
+    DefaultValue       : 0
+    MinValue           : 0
+    MaxValue           : 1
+    Elements           : { 0: 'Anonymous',
+                           1: 'Basic' }
+    DependentProperties: { 'User'    : [1],
+                           'Password': [1] }
+
+  - Id          : User
+    Name        : "User"
+    Description : "The user"
+    DataType    : String
+    UiControl   : TextBox
+
+  - Id          : Password
+    Name        : "Password"
+    Description : "The password"
+    DataType    : String
+    UiControl   : PasswordBox
+
+  - Id          : ApplicationCertificateSubject
+    Name        : "Application Certificate Subject"
+    Description : "The subject of the application certificate."
+    DataType    : String
+    UiControl   : TextBox
+    DefaultValue: "CN=OPC-UA Server, DC=localhost"
+
+  - Id          : ApplicationCertificatesStoreType
+    Name        : "Application Certificates - Store Type"
+    Description : "The type of the certificate store."
+    DataType    : UInt8
+    UiControl   : NumericListBox
+    DefaultValue: 1
+    MinValue    : 1
+    MaxValue    : 2
+    Elements    : { 0: 'None',
+                    1: 'X509 Store',
+                    2: 'Directory' }
+
+  - Id          : ApplicationCertificatesStorePath
+    Name        : "Application Certificates - Store Path"
+    Description : "The path to the certificate store or the name in case of a 'X509 Store'."
+    DataType    : String
+    UiControl   : TextBox
+    DefaultValue: "CurrentUser\\My"
+
+  - Id          : TrustedCertificatesStoreType
+    Name        : "Trusted Certificates - Store Type"
+    Description : "The type of the certificate store."
+    DataType    : UInt8
+    UiControl   : NumericListBox
+    DefaultValue: 0
+    MinValue    : 0
+    MaxValue    : 2
+    Elements    : { 0: 'None',
+                    1: 'X509 Store',
+                    2: 'Directory' }
+
+  - Id          : TrustedCertificatesStorePath
+    Name        : "Trusted Certificates - Store Path"
+    Description : "The path to the certificate store or the name in case of a 'X509 Store'."
+    DataType    : String
+    UiControl   : TextBox
+
+  - Id          : TrustedIssuerCertificatesStoreType
+    Name        : "Trusted Issuer Certificates - Store Type"
+    Description : "The type of the certificate store."
+    DataType    : UInt8
+    UiControl   : NumericListBox
+    DefaultValue: 0
+    MinValue    : 0
+    MaxValue    : 2
+    Elements    : { 0: 'None',
+                    1: 'X509 Store',
+                    2: 'Directory' }
+
+  - Id          : TrustedIssuerCertificatesStorePath
+    Name        : "Trusted Issuer Certificates - Store Path"
+    Description : "The path to the certificate store or the name in case of a 'X509 Store'."
+    DataType    : String
+    UiControl   : TextBox
+
+  - Id          : AutoAcceptUntrustedCertificates
+    Name        : "Auto Accept Untrusted Certificates"
+    Description : "Auto accept untrusted certificates."
+    DataType    : Bool
+    UiControl   : CheckBox
+    DefaultValue: false
+
+  - Id          : TransportQuotas
+    Name        : "Transport Quotas"
+    Description : "Enable custom transport quotas to harden against denial-of-service attacks."
+    DataType    : Bool
+    UiControl   : CheckBox
+    DefaultValue: true
+
+  - Id                 : SecurityPolicy
+    Name               : "Security Policy"
+    Description        : "The security policy applied to OPC-UA connections. 'None' disables encryption and signing (insecure, test/debug only)."
+    DataType           : UInt8
+    UiControl          : NumericListBox
+    DefaultValue       : 2
+    MinValue           : 0
+    MaxValue           : 3
+    Elements           : { 0: 'None',
+                           1: 'Basic256Sha256 Sign',
+                           2: 'Basic256Sha256 SignAndEncrypt',
+                           3: 'Aes256-Sha256-RsaPss SignAndEncrypt' }
+
+  - Id          : ReadOnly
+    Name        : "Read only"
+    Description : "Read only"
+    DataType    : Bool
+    UiControl   : CheckBox
+    DefaultValue: false
+
+Icons:
+
+  - Id          : opcua-server
+    Content     : PHN2ZyB2aWV3Qm94PSIwIDAgMzIgMzIiIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayI+CiAgICA8dGl0bGU+ZGFyay10aGVtZS9pY29uL21vbm9jaHJvbWUvMzJ4MzIvb3BjLXVhLXNlcnZlci9saWdodDwvdGl0bGU+CiAgICA8ZyBpZD0iZGFyay10aGVtZS9pY29uL21vbm9jaHJvbWUvMzJ4MzIvb3BjLXVhLXNlcnZlci9saWdodCIgc3Ryb2tlPSJub25lIiBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPgogICAgICAgIDxwYXRoIGQ9Ik0yMy44OTY5OTI1LDIwLjUgQzI0LjQ0OTI3NzIsMjAuNSAyNC44OTY5OTI1LDIwLjk0NzcxNTMgMjQuODk2OTkyNSwyMS41IEMyNC44OTY5OTI1LDIxLjYxMzIzMyAyNC44NzgxNzI0LDIxLjcyMjA3MDMgMjQuODQzNDg5NiwyMS44MjM1NTQ2IEwxOS4xMzk3NDYxLDIxLjgyMzQzNzUgTDE5LjEzODgzOTgsMjIuNSBMMTYuOTg2NjgyOCwyMi40OTk3ODcgQzE2LjQ0NjA3NCwyMi4wNDE3NDYzIDE1Ljc3MzI1NTMsMjEuNzk4Nzk1MiAxNS4wMDY2NjgsMjEuNzU3ODg2MSBMMTQuNzcwMjE0OCwyMS43NTE2NjAyIEMxNC43MjgxNDY5LDIxLjc1MTY2MDIgMTQuNjg2Mjg4NiwyMS43NTIzNTI1IDE0LjY0NDY0NzUsMjEuNzUzNzM4MyBDMTQuNjIyNzQ3MywyMS42NzQxMTA4IDE0LjYxMTI3ODIsMjEuNTg4Mzk0OCAxNC42MTEyNzgyLDIxLjUgQzE0LjYxMTI3ODIsMjAuOTQ3NzE1MyAxNS4wNTg5OTM0LDIwLjUgMTUuNjExMjc4MiwyMC41IEwyMy44OTY5OTI1LDIwLjUgWiBNMTEuNjExMjc4MiwyMC41IEMxMi4xNjM1NjI5LDIwLjUgMTIuNjExMjc4MiwyMC45NDc3MTUzIDEyLjYxMTI3ODIsMjEuNSBDMTIuNjExMjc4MiwyMS44NDA4NTYzIDEyLjQ0MDc0MTIsMjIuMTQxODgxNiAxMi4xODAzMzU4LDIyLjMyMjQwNzQgQzEyLjA4MjE2ODQsMjIuMjU4ODY0NCAxMS45Nzk3MDQsMjIuMjAyMzUwNyAxMS44NzI4Nzg2LDIyLjE1MTIyNDEgQzExLjQxMTE5NjgsMjEuOTMwMjYzNiAxMC44OTc5MTA2LDIxLjgyMzQzNzUgMTAuMzQ0ODI0MiwyMS44MjM0Mzc1IEwxMC4xMzg0NjUzLDIxLjgyMzU1NDYgQzEwLjEwMzc4MjUsMjEuNzIyMDcwMyAxMC4wODQ5NjI0LDIxLjYxMzIzMyAxMC4wODQ5NjI0LDIxLjUgQzEwLjA4NDk2MjQsMjAuOTQ3NzE1MyAxMC41MzI2Nzc3LDIwLjUgMTEuMDg0OTYyNCwyMC41IEwxMS42MTEyNzgyLDIwLjUgWiBNMjcsMTcgQzI3LjU1MjI4NDcsMTcgMjgsMTcuNDQ3NzE1MyAyOCwxOCBMMjcuOTk5ODM5OCwyMS44MjMgTDI3LjI4NjQ2MzcsMjEuODIzNDM3NSBMMjYuODMyNzYzNywyMC4zNjQwODQxIEwyNi43OTk4Mzk4LDIwLjQ2OCBMMjYuOCwxOC4yIEw1LjIwMDAwMDAxLDE4LjIgTDUuMjAwMDgyNjUsMjEuNzgzNzc5IEM0LjczNDA4Mjk5LDIxLjg0MjcwNTggNC4yOTcyNjIyMywyMS45OTI0NDcgMy45MDAxNDU2LDIyLjIzMzY5ODcgTDMuOTk5ODM5ODQsMjIuMTc3IEw0LDE4IEM0LDE3LjQ0NzcxNTMgNC40NDc3MTUyNSwxNyA1LDE3IEwyNywxNyBaIE04LjA5MjQ4MTIsMjAuNSBDOC42NDA2MTM0NCwyMC41IDkuMDg0OTYyNDEsMjAuOTQ3NzE1MyA5LjA4NDk2MjQxLDIxLjUgQzkuMDg0OTYyNDEsMjEuNjEzMjMzIDkuMDY2MjgzODIsMjEuNzIyMDcwMyA5LjAzMTg2MTgsMjEuODIzNTU0NiBMNy4xNTg5ODQzNywyMS44MjM0Mzc1IEw3LjE1ODU5NjkyLDIxLjgzOTMyMzggQzcuMTIwNjcxMzcsMjEuNzMzMzc1OCA3LjEsMjEuNjE5MTIwMiA3LjEsMjEuNSBDNy4xLDIwLjk0NzcxNTMgNy41NDQzNDg5NywyMC41IDguMDkyNDgxMiwyMC41IFogTTI3LDYgQzI3LjU1MjI4NDcsNiAyOCw2LjQ0NzcxNTI1IDI4LDcgTDI4LDE0IEMyOCwxNC41NTIyODQ3IDI3LjU1MjI4NDcsMTUgMjcsMTUgTDUsMTUgQzQuNDQ3NzE1MjUsMTUgNCwxNC41NTIyODQ3IDQsMTQgTDQsNyBDNCw2LjQ0NzcxNTI1IDQuNDQ3NzE1MjUsNiA1LDYgTDI3LDYgWiBNMjYuOCw3LjIwMDAwMDAyIEw1LjIwMDAwMDAxLDcuMjAwMDAwMDIgTDUuMjAwMDAwMDEsMTMuOCBMMjYuOCwxMy44IEwyNi44LDcuMjAwMDAwMDIgWiBNOC4wOTI0ODEyLDkuNSBDOC42NDA2MTM0NCw5LjUgOS4wODQ5NjI0MSw5Ljk0NzcxNTI1IDkuMDg0OTYyNDEsMTAuNSBDOS4wODQ5NjI0MSwxMS4wNTIyODQ3IDguNjQwNjEzNDQsMTEuNSA4LjA5MjQ4MTIsMTEuNSBDNy41NDQzNDg5NywxMS41IDcuMSwxMS4wNTIyODQ3IDcuMSwxMC41IEM3LjEsOS45NDc3MTUyNSA3LjU0NDM0ODk3LDkuNSA4LjA5MjQ4MTIsOS41IFogTTIzLjg5Njk5MjUsOS41IEMyNC40NDkyNzcyLDkuNSAyNC44OTY5OTI1LDkuOTQ3NzE1MjUgMjQuODk2OTkyNSwxMC41IEMyNC44OTY5OTI1LDExLjA1MjI4NDcgMjQuNDQ5Mjc3MiwxMS41IDIzLjg5Njk5MjUsMTEuNSBMMTUuNjExMjc4MiwxMS41IEMxNS4wNTg5OTM0LDExLjUgMTQuNjExMjc4MiwxMS4wNTIyODQ3IDE0LjYxMTI3ODIsMTAuNSBDMTQuNjExMjc4Miw5Ljk0NzcxNTI1IDE1LjA1ODk5MzQsOS41IDE1LjYxMTI3ODIsOS41IEwyMy44OTY5OTI1LDkuNSBaIE0xMS42MTEyNzgyLDkuNSBDMTIuMTYzNTYyOSw5LjUgMTIuNjExMjc4Miw5Ljk0NzcxNTI1IDEyLjYxMTI3ODIsMTAuNSBDMTIuNjExMjc4MiwxMS4wNTIyODQ3IDEyLjE2MzU2MjksMTEuNSAxMS42MTEyNzgyLDExLjUgTDExLjA4NDk2MjQsMTEuNSBDMTAuNTMyNjc3NywxMS41IDEwLjA4NDk2MjQsMTEuMDUyMjg0NyAxMC4wODQ5NjI0LDEwLjUgQzEwLjA4NDk2MjQsOS45NDc3MTUyNSAxMC41MzI2Nzc3LDkuNSAxMS4wODQ5NjI0LDkuNSBMMTEuNjExMjc4Miw5LjUgWiBNNy44NDAzMzIwMywyNS42MTQyNTc4IEM3Ljg0MDMzMjAzLDI2LjA5OTYwOTQgNy43NTAzMjU1MiwyNi41MjkxMzQxIDcuNTcwMzEyNSwyNi45MDI4MzIgQzcuMzkwMjk5NDgsMjcuMjc2NTI5OSA3LjEzNDUyMTQ4LDI3LjU2NDIwOSA2LjgwMjk3ODUyLDI3Ljc2NTg2OTEgQzYuNDcxNDM1NTUsMjcuOTY3NTI5MyA2LjA5Mzc1LDI4LjA2ODM1OTQgNS42Njk5MjE4OCwyOC4wNjgzNTk0IEM1LjI0NjA5Mzc1LDI4LjA2ODM1OTQgNC44NzAxMTcxOSwyNy45NzA5NDczIDQuNTQxOTkyMTksMjcuNzc2MTIzIEM0LjIxMzg2NzE5LDI3LjU4MTI5ODggMy45NTgwODkxOSwyNy4zMDI3MzQ0IDMuNzc0NjU4MiwyNi45NDA0Mjk3IEMzLjU5MTIyNzIxLDI2LjU3ODEyNSAzLjQ5NDk1NDQzLDI2LjE2MjI3MjEgMy40ODU4Mzk4NCwyNS42OTI4NzExIEwzLjQ4NTgzOTg0LDI1LjQxMjU5NzcgQzMuNDg1ODM5ODQsMjQuOTI0OTY3NCAzLjU3NTI3NjY5LDI0LjQ5NDg3MyAzLjc1NDE1MDM5LDI0LjEyMjMxNDUgQzMuOTMzMDI0MDksMjMuNzQ5NzU1OSA0LjE4OTM3MTc0LDIzLjQ2MjA3NjggNC41MjMxOTMzNiwyMy4yNTkyNzczIEM0Ljg1NzAxNDk3LDIzLjA1NjQ3NzkgNS4yMzY5NzkxNywyMi45NTUwNzgxIDUuNjYzMDg1OTQsMjIuOTU1MDc4MSBDNi4wODQ2MzU0MiwyMi45NTUwNzgxIDYuNDYwNjExOTgsMjMuMDU1MzM4NSA2Ljc5MTAxNTYyLDIzLjI1NTg1OTQgQzcuMTIxNDE5MjcsMjMuNDU2MzgwMiA3LjM3ODMzNjU5LDIzLjc0MTc4MDYgNy41NjE3Njc1OCwyNC4xMTIwNjA1IEM3Ljc0NTE5ODU3LDI0LjQ4MjM0MDUgNy44MzgwNTMzOSwyNC45MDY3MzgzIDcuODQwMzMyMDMsMjUuMzg1MjUzOSBMNy44NDAzMzIwMywyNS42MTQyNTc4IFogTTYuNjIwMTE3MTksMjUuNDA1NzYxNyBDNi42MjAxMTcxOSwyNC45MTEyOTU2IDYuNTM3NTE2MjgsMjQuNTM1ODg4NyA2LjM3MjMxNDQ1LDI0LjI3OTU0MSBDNi4yMDcxMTI2MywyNC4wMjMxOTM0IDUuOTcwNzAzMTIsMjMuODk1MDE5NSA1LjY2MzA4NTk0LDIzLjg5NTAxOTUgQzUuMDYxNTIzNDQsMjMuODk1MDE5NSA0Ljc0MzY1MjM0LDI0LjM0NjE5MTQgNC43MDk0NzI2NiwyNS4yNDg1MzUyIEw0LjcwNjA1NDY5LDI1LjYxNDI1NzggQzQuNzA2MDU0NjksMjYuMTAxODg4IDQuNzg2OTQ2NjEsMjYuNDc2NzI1MyA0Ljk0ODczMDQ3LDI2LjczODc2OTUgQzUuMTEwNTE0MzIsMjcuMDAwODEzOCA1LjM1MDkxMTQ2LDI3LjEzMTgzNTkgNS42Njk5MjE4OCwyNy4xMzE4MzU5IEM1Ljk3Mjk4MTc3LDI3LjEzMTgzNTkgNi4yMDY1NDI5NywyNy4wMDMwOTI0IDYuMzcwNjA1NDcsMjYuNzQ1NjA1NSBDNi41MzQ2Njc5NywyNi40ODgxMTg1IDYuNjE3ODM4NTQsMjYuMTE3ODM4NSA2LjYyMDExNzE5LDI1LjYzNDc2NTYgTDYuNjIwMTE3MTksMjUuNDA1NzYxNyBaIE05LjU1ODY5MTQsMjYuMzExNTIzNCBMOS41NTg2OTE0LDI4IEw4LjM1ODk4NDM3LDI4IEw4LjM1ODk4NDM3LDIzLjAyMzQzNzUgTDEwLjM0NDgyNDIsMjMuMDIzNDM3NSBDMTAuNzI1MzU4MSwyMy4wMjM0Mzc1IDExLjA2MjAyOCwyMy4wOTM1MDU5IDExLjM1NDgzNCwyMy4yMzM2NDI2IEMxMS42NDc2NCwyMy4zNzM3NzkzIDExLjg3NDM2NTIsMjMuNTczMTYwOCAxMi4wMzUwMDk4LDIzLjgzMTc4NzEgQzEyLjE5NTY1NDMsMjQuMDkwNDEzNCAxMi4yNzU5NzY2LDI0LjM4Mzc4OTEgMTIuMjc1OTc2NiwyNC43MTE5MTQxIEMxMi4yNzU5NzY2LDI1LjE5NzI2NTYgMTIuMTAyMjI5OCwyNS41ODUyMDUxIDExLjc1NDczNjMsMjUuODc1NzMyNCBDMTEuNDA3MjQyOCwyNi4xNjYyNTk4IDEwLjkzMDQzNjIsMjYuMzExNTIzNCAxMC4zMjQzMTY0LDI2LjMxMTUyMzQgTDkuNTU4NjkxNCwyNi4zMTE1MjM0IFogTTkuNTU4NjkxNCwyNS4zODUyNTM5IEwxMC4zNDQ4MjQyLDI1LjM4NTI1MzkgQzEwLjU3NzI0NjEsMjUuMzg1MjUzOSAxMC43NTQ0MTA4LDI1LjMyNzE0ODQgMTAuODc2MzE4NCwyNS4yMTA5Mzc1IEMxMC45OTgyMjU5LDI1LjA5NDcyNjYgMTEuMDU5MTc5NywyNC45MzA2NjQxIDExLjA1OTE3OTcsMjQuNzE4NzUgQzExLjA1OTE3OTcsMjQuNDg2MzI4MSAxMC45OTY1MTY5LDI0LjMwMDYxODUgMTAuODcxMTkxNCwyNC4xNjE2MjExIEMxMC43NDU4NjU5LDI0LjAyMjYyMzcgMTAuNTc0OTY3NCwyMy45NTE5ODU3IDEwLjM1ODQ5NjEsMjMuOTQ5NzA3IEw5LjU1ODY5MTQsMjMuOTQ5NzA3IEw5LjU1ODY5MTQsMjUuMzg1MjUzOSBaIE0xNi44NDE1MDM5LDI2LjMxNDk0MTQgQzE2LjgyNTU1MzQsMjYuNjYxMjk1NiAxNi43MzIxMjg5LDI2Ljk2NzIwMzggMTYuNTYxMjMwNSwyNy4yMzI2NjYgQzE2LjM5MDMzMiwyNy40OTgxMjgzIDE2LjE1MDUwNDUsMjcuNzAzNzc2IDE1Ljg0MTc0OCwyNy44NDk2MDk0IEMxNS41MzI5OTE1LDI3Ljk5NTQ0MjcgMTUuMTgwMzcxMSwyOC4wNjgzNTk0IDE0Ljc4Mzg4NjcsMjguMDY4MzU5NCBDMTQuMTI5OTE1NCwyOC4wNjgzNTk0IDEzLjYxNDk0MTQsMjcuODU1MzA2IDEzLjIzODk2NDgsMjcuNDI5MTk5MiBDMTIuODYyOTg4MywyNy4wMDMwOTI0IDEyLjY3NSwyNi40MDE1Mjk5IDEyLjY3NSwyNS42MjQ1MTE3IEwxMi42NzUsMjUuMzc4NDE4IEMxMi42NzUsMjQuODkwNzg3OCAxMi43NTk4Nzk1LDI0LjQ2NDExMTMgMTIuOTI5NjM4NywyNC4wOTgzODg3IEMxMy4wOTkzOTc4LDIzLjczMjY2NiAxMy4zNDM3ODI1LDIzLjQ1MDExMzkgMTMuNjYyNzkzLDIzLjI1MDczMjQgQzEzLjk4MTgwMzQsMjMuMDUxMzUwOSAxNC4zNTA5NDQsMjIuOTUxNjYwMiAxNC43NzAyMTQ4LDIyLjk1MTY2MDIgQzE1LjM3NDA1NiwyMi45NTE2NjAyIDE1Ljg1OTQwNzUsMjMuMTEwNTk1NyAxNi4yMjYyNjk1LDIzLjQyODQ2NjggQzE2LjU5MzEzMTUsMjMuNzQ2MzM3OSAxNi44MDE2Mjc2LDI0LjE4NDQwNzYgMTYuODUxNzU3OCwyNC43NDI2NzU4IEwxNS42NTU0Njg3LDI0Ljc0MjY3NTggQzE1LjY0NjM1NDIsMjQuNDM5NjE1OSAxNS41NzAwMTk1LDI0LjIyMjAwNTIgMTUuNDI2NDY0OCwyNC4wODk4NDM4IEMxNS4yODI5MTAxLDIzLjk1NzY4MjMgMTUuMDY0MTYwMSwyMy44OTE2MDE2IDE0Ljc3MDIxNDgsMjMuODkxNjAxNiBDMTQuNDcxNzEyMiwyMy44OTE2MDE2IDE0LjI1Mjk2MjIsMjQuMDAzMjU1MiAxNC4xMTM5NjQ4LDI0LjIyNjU2MjUgQzEzLjk3NDk2NzQsMjQuNDQ5ODY5OCAxMy45MDIwNTA4LDI0LjgwNjQ3NzkgMTMuODk1MjE0OCwyNS4yOTYzODY3IEwxMy44OTUyMTQ4LDI1LjY0ODQzNzUgQzEzLjg5NTIxNDgsMjYuMTc5MzYyIDEzLjk2MTg2NTIsMjYuNTU4NzU2NSAxNC4wOTUxNjYsMjYuNzg2NjIxMSBDMTQuMjI4NDY2OCwyNy4wMTQ0ODU3IDE0LjQ1ODA0MDQsMjcuMTI4NDE4IDE0Ljc4Mzg4NjcsMjcuMTI4NDE4IEMxNS4wNTk2MDI5LDI3LjEyODQxOCAxNS4yNzAzNzc2LDI3LjA2MzQ3NjYgMTUuNDE2MjEwOSwyNi45MzM1OTM4IEMxNS41NjIwNDQzLDI2LjgwMzcxMDkgMTUuNjM5NTE4MiwyNi41OTc0OTM1IDE1LjY0ODYzMjgsMjYuMzE0OTQxNCBMMTYuODQxNTAzOSwyNi4zMTQ5NDE0IFogTTE5LjUwNjY0MDYsMjYuMzAxMjY5NSBMMTcuNDUyNDQxNCwyNi4zMDEyNjk1IEwxNy40NTI0NDE0LDI1LjQwOTE3OTcgTDE5LjUwNjY0MDYsMjUuNDA5MTc5NyBMMTkuNTA2NjQwNiwyNi4zMDEyNjk1IFogTTI0LjI2MDE1NjIsMjMuMDIzNDM3NSBMMjQuMjYwMTU2MiwyNi4yODA3NjE3IEMyNC4yNjAxNTYyLDI2LjY0OTkwMjMgMjQuMTgxNTQzLDI2Ljk2OTQ4MjQgMjQuMDI0MzE2NCwyNy4yMzk1MDIgQzIzLjg2NzA4OTgsMjcuNTA5NTIxNSAyMy42NDE1MDM5LDI3LjcxNTE2OTMgMjMuMzQ3NTU4NiwyNy44NTY0NDUzIEMyMy4wNTM2MTMzLDI3Ljk5NzcyMTQgMjIuNzA2MTE5OCwyOC4wNjgzNTk0IDIyLjMwNTA3ODEsMjguMDY4MzU5NCBDMjEuNjk4OTU4MywyOC4wNjgzNTk0IDIxLjIyMTU4MiwyNy45MTExMzI4IDIwLjg3Mjk0OTIsMjcuNTk2Njc5NyBDMjAuNTI0MzE2NCwyNy4yODIyMjY2IDIwLjM0NjU4MiwyNi44NTE1NjI1IDIwLjMzOTc0NjEsMjYuMzA0Njg3NSBMMjAuMzM5NzQ2MSwyMy4wMjM0Mzc1IEwyMS41NDYyODksMjMuMDIzNDM3NSBMMjEuNTQ2Mjg5LDI2LjMyODYxMzMgQzIxLjU1OTk2MDksMjYuODczMjA5NiAyMS44MTI4OTA2LDI3LjE0NTUwNzggMjIuMzA1MDc4MSwyNy4xNDU1MDc4IEMyMi41NTM0NTA1LDI3LjE0NTUwNzggMjIuNzQxNDM4OCwyNy4wNzcxNDg0IDIyLjg2OTA0MywyNi45NDA0Mjk3IEMyMi45OTY2NDcxLDI2LjgwMzcxMDkgMjMuMDYwNDQ5MiwyNi41ODE1NDMgMjMuMDYwNDQ5MiwyNi4yNzM5MjU4IEwyMy4wNjA0NDkyLDIzLjAyMzQzNzUgTDI0LjI2MDE1NjIsMjMuMDIzNDM3NSBaIE0yNy42NjAxNTYyLDI3LjA3MDMxMjUgTDI2LjAxNjExMzMsMjcuMDcwMzEyNSBMMjUuNzI5MDAzOSwyOCBMMjQuNDQ3MjY1NiwyOCBMMjYuMjcyNDYwOSwyMy4wMjM0Mzc1IEwyNy40MDAzOTA2LDIzLjAyMzQzNzUgTDI5LjIzOTI1NzgsMjggTDI3Ljk1MDY4MzYsMjggTDI3LjY2MDE1NjIsMjcuMDcwMzEyNSBaIE0yNi4zMDMyMjI2LDI2LjE0NDA0MyBMMjcuMzczMDQ2OSwyNi4xNDQwNDMgTDI2LjgzNjQyNTgsMjQuNDE3OTY4OCBMMjYuMzAzMjIyNiwyNi4xNDQwNDMgWiIgaWQ9IkNvbWJpbmVkLVNoYXBlIiBmaWxsPSJjdXJyZW50Q29sb3IiPjwvcGF0aD4KICAgIDwvZz4KPC9zdmc+
+    ContentType : Base64

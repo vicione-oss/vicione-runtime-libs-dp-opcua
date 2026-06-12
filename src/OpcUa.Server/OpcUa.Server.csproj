@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ViciOne.Suite.DataPort</RootNamespace>
+    <AssemblyName>ViciOne.Suite.DataPort.OpcUa.Server</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Server" />
+    <PackageReference Include="ViciOne.Suite.DataPort" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OpcUa.Server.Standalone" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="OpcUaServer.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

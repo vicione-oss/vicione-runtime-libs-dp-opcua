@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ViciOne.Suite.DataPort</RootNamespace>
+    <AssemblyName>ViciOne.Suite.DataPort.OpcUa.Client</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" />
+    <PackageReference Include="ViciOne.Suite.DataPort" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="OpcUaClient.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\OpcUa.Server\UserAuthenticationType.cs" Link="UserAuthenticationType.cs" />
+  </ItemGroup>
+
+</Project>
