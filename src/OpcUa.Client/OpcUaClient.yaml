@@ -29,6 +29,10 @@ Nodes:
     MetadataLength         : 0
     Icon                   : client
     TransferDirections     : [ Outbound, Inbound ]
+    NameValidations        :
+      - Type               : Regex
+        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Message            : "Client name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
     ChildNodes             :
       - Id                 : Folder
         Required           : true
@@ -74,6 +78,10 @@ Nodes:
     Description            : "Folder in the OPC-UA Topic Tree"
     Icon                   : folder
     TransferModes          : [ None ]
+    NameValidations        :
+      - Type               : Regex
+        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Message            : "Folder name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
     ChildNodes             :
       - Id                 : Folder
       - Id                 : DataPointBool
@@ -93,6 +101,10 @@ Nodes:
     Icon                   : datapoint
     TransferModes          : [ OnChange, Periodic, None ]
     DataTypes              : [ Bool ]
+    NameValidations        :
+      - Type               : Regex
+        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointInteger
     MappingId              : Variable
@@ -102,6 +114,10 @@ Nodes:
     Icon                   : datapoint
     TransferModes          : [ OnChange, Periodic, None ]
     DataTypes              : [ Int32, Int64, Int16, Int8, UInt32, UInt64, UInt16, UInt8 ]
+    NameValidations        :
+      - Type               : Regex
+        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointFloat
     MappingId              : Variable
@@ -111,6 +127,10 @@ Nodes:
     Icon                   : datapoint
     TransferModes          : [ OnChange, Periodic, None ]
     DataTypes              : [ Float64, Float32 ]
+    NameValidations        :
+      - Type               : Regex
+        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointDateTime
     MappingId              : Variable
@@ -120,6 +140,10 @@ Nodes:
     Icon                   : datapoint
     TransferModes          : [ OnChange, Periodic, None ]
     DataTypes              : [ DateTime ]
+    NameValidations        :
+      - Type               : Regex
+        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointString
     MappingId              : Variable
@@ -129,6 +153,10 @@ Nodes:
     Icon                   : datapoint
     TransferModes          : [ OnChange, Periodic, None ]
     DataTypes              : [ String ]
+    NameValidations        :
+      - Type               : Regex
+        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointBinary
     MappingId              : Variable
@@ -138,6 +166,10 @@ Nodes:
     Icon                   : datapoint
     TransferModes          : [ OnChange, Periodic, None ]
     DataTypes              : [ Binary ]
+    NameValidations        :
+      - Type               : Regex
+        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
 PropertyCategories:
   - Id          : Connection

@@ -5,6 +5,7 @@
 ### Changed
 
 - Add new icons to DataPorts
+- Update `.yaml` files format to `2.0.0` (`ViciOne.TreeBuilder`)
 
 ## 0.32.0 - 2026-05-11
 
