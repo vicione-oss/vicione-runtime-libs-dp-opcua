@@ -94,7 +94,7 @@ Push OPCUA Client binaries:
   rules:
     - <<: *rule_tag
       variables:
-        SERVER: 'https://ifm.jfrog.io/artifactory/vicione-suite'
+        SERVER: 'https://ifm.jfrog.io/artifactory/vicione-suite-staging'
     - *rule_default_branch_manual
     - *rule_mr_manual
     - *rule_web_manual
@@ -120,7 +120,7 @@ Push OPCUA Server binaries:
   rules:
     - <<: *rule_tag
       variables:
-        SERVER: 'https://ifm.jfrog.io/artifactory/vicione-suite'
+        SERVER: 'https://ifm.jfrog.io/artifactory/vicione-suite-staging'
     - *rule_default_branch_manual
     - *rule_mr_manual
     - *rule_web_manual
@@ -139,3 +139,10 @@ Push OPCUA Server binaries:
     - dotnet nuget update source JFrogViciOne --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
   after_script:
     - !reference [ .push-metadata ]
+
+Publish binaries:
+  extends: .dotnet-release-public
+  stage: publish
+  needs:
+    - Push OPCUA Client binaries
+    - Push OPCUA Server binaries
