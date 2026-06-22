@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace ViciOne.Suite.DataPort;
 
-internal static class TransportQuotasConfiguration
+internal sealed class TransportQuotasConfiguration
 {
     internal const string MaxStringLengthEnvVar = "OPCUA_MAX_STRING_LENGTH";
     internal const string MaxByteStringLengthEnvVar = "OPCUA_MAX_BYTE_STRING_LENGTH";
@@ -28,21 +28,27 @@ internal static class TransportQuotasConfiguration
     internal const int DefaultMinSessionTimeout = 10_000;        // 10 sec
     internal const int DefaultMaxSessionTimeout = 600_000;       // 10 min
 
-    internal static int MaxStringLength => ReadEnvInt(MaxStringLengthEnvVar, DefaultMaxStringLength);
-    internal static int MaxByteStringLength => ReadEnvInt(MaxByteStringLengthEnvVar, DefaultMaxByteStringLength);
-    internal static int MaxArrayLength => ReadEnvInt(MaxArrayLengthEnvVar, DefaultMaxArrayLength);
-    internal static int MaxMessageSize => ReadEnvInt(MaxMessageSizeEnvVar, DefaultMaxMessageSize);
-    internal static int MaxBufferSize => ReadEnvInt(MaxBufferSizeEnvVar, DefaultMaxBufferSize);
-    internal static int OperationTimeout => ReadEnvInt(OperationTimeoutEnvVar, DefaultOperationTimeout);
+    internal static TransportQuotasConfiguration Default { get; } = new(Environment.GetEnvironmentVariable);
 
-    internal static int MaxSessionCount => ReadEnvInt(MaxSessionCountEnvVar, DefaultMaxSessionCount);
-    internal static int MaxSubscriptionCount => ReadEnvInt(MaxSubscriptionCountEnvVar, DefaultMaxSubscriptionCount);
-    internal static int MinSessionTimeout => ReadEnvInt(MinSessionTimeoutEnvVar, DefaultMinSessionTimeout);
-    internal static int MaxSessionTimeout => ReadEnvInt(MaxSessionTimeoutEnvVar, DefaultMaxSessionTimeout);
+    private readonly Func<string, string?> _readEnv;
 
-    private static int ReadEnvInt(string name, int defaultValue)
+    internal TransportQuotasConfiguration(Func<string, string?> readEnv) => _readEnv = readEnv;
+
+    internal int MaxStringLength => ReadEnvInt(MaxStringLengthEnvVar, DefaultMaxStringLength);
+    internal int MaxByteStringLength => ReadEnvInt(MaxByteStringLengthEnvVar, DefaultMaxByteStringLength);
+    internal int MaxArrayLength => ReadEnvInt(MaxArrayLengthEnvVar, DefaultMaxArrayLength);
+    internal int MaxMessageSize => ReadEnvInt(MaxMessageSizeEnvVar, DefaultMaxMessageSize);
+    internal int MaxBufferSize => ReadEnvInt(MaxBufferSizeEnvVar, DefaultMaxBufferSize);
+    internal int OperationTimeout => ReadEnvInt(OperationTimeoutEnvVar, DefaultOperationTimeout);
+
+    internal int MaxSessionCount => ReadEnvInt(MaxSessionCountEnvVar, DefaultMaxSessionCount);
+    internal int MaxSubscriptionCount => ReadEnvInt(MaxSubscriptionCountEnvVar, DefaultMaxSubscriptionCount);
+    internal int MinSessionTimeout => ReadEnvInt(MinSessionTimeoutEnvVar, DefaultMinSessionTimeout);
+    internal int MaxSessionTimeout => ReadEnvInt(MaxSessionTimeoutEnvVar, DefaultMaxSessionTimeout);
+
+    private int ReadEnvInt(string name, int defaultValue)
     {
-        var value = Environment.GetEnvironmentVariable(name);
+        var value = _readEnv(name);
         return value is not null && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)
             ? result
             : defaultValue;

@@ -6,8 +6,9 @@ namespace ViciOne.Suite.DataPort;
 
 internal static class OpcUaSetup
 {
-    internal static ApplicationConfiguration CreateConfiguration(OpcUaServerDataPortProperties properties)
+    internal static ApplicationConfiguration CreateConfiguration(OpcUaServerDataPortProperties properties, TransportQuotasConfiguration? quotasConfig = null)
     {
+        var config = quotasConfig ?? TransportQuotasConfiguration.Default;
         ServerConfiguration serverConfiguration = new();
         serverConfiguration.BaseAddresses.Add($"opc.tcp://{properties.Server}:{properties.Port.ToString(CultureInfo.InvariantCulture)}/{properties.Endpoint}");
         serverConfiguration.ServerProfileArray =
@@ -18,10 +19,10 @@ internal static class OpcUaSetup
         ];
         serverConfiguration.SecurityPolicies = CreateSecurityPolicies(properties.SecurityPolicy);
         serverConfiguration.MaxRegistrationInterval = 0; // do not register itself
-        serverConfiguration.MaxSessionCount = TransportQuotasConfiguration.MaxSessionCount;
-        serverConfiguration.MaxSubscriptionCount = TransportQuotasConfiguration.MaxSubscriptionCount;
-        serverConfiguration.MinSessionTimeout = TransportQuotasConfiguration.MinSessionTimeout;
-        serverConfiguration.MaxSessionTimeout = TransportQuotasConfiguration.MaxSessionTimeout;
+        serverConfiguration.MaxSessionCount = config.MaxSessionCount;
+        serverConfiguration.MaxSubscriptionCount = config.MaxSubscriptionCount;
+        serverConfiguration.MinSessionTimeout = config.MinSessionTimeout;
+        serverConfiguration.MaxSessionTimeout = config.MaxSessionTimeout;
 
         serverConfiguration.UserTokenPolicies =
         [
@@ -38,7 +39,7 @@ internal static class OpcUaSetup
             ApplicationName = properties.ApplicationName,
             ApplicationUri = properties.ApplicationUri,
             ApplicationType = ApplicationType.Server,
-            TransportQuotas = properties.TransportQuotas ? CreateTransportQuotas() : null,
+            TransportQuotas = properties.TransportQuotas ? CreateTransportQuotas(config) : null,
             ServerConfiguration = serverConfiguration,
         };
 
@@ -89,13 +90,13 @@ internal static class OpcUaSetup
         return [new() { SecurityMode = securityMode, SecurityPolicyUri = securityPolicyUri }];
     }
 
-    private static TransportQuotas CreateTransportQuotas() => new()
+    private static TransportQuotas CreateTransportQuotas(TransportQuotasConfiguration config) => new()
     {
-        MaxStringLength = TransportQuotasConfiguration.MaxStringLength,
-        MaxByteStringLength = TransportQuotasConfiguration.MaxByteStringLength,
-        MaxArrayLength = TransportQuotasConfiguration.MaxArrayLength,
-        MaxMessageSize = TransportQuotasConfiguration.MaxMessageSize,
-        MaxBufferSize = TransportQuotasConfiguration.MaxBufferSize,
-        OperationTimeout = TransportQuotasConfiguration.OperationTimeout,
+        MaxStringLength = config.MaxStringLength,
+        MaxByteStringLength = config.MaxByteStringLength,
+        MaxArrayLength = config.MaxArrayLength,
+        MaxMessageSize = config.MaxMessageSize,
+        MaxBufferSize = config.MaxBufferSize,
+        OperationTimeout = config.OperationTimeout,
     };
 }
