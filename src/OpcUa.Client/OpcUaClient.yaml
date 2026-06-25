@@ -31,7 +31,7 @@ Nodes:
     TransferDirections     : [ Outbound, Inbound ]
     NameValidations        :
       - Type               : Regex
-        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "Client name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
     ChildNodes             :
       - Id                 : Folder
@@ -80,7 +80,7 @@ Nodes:
     TransferModes          : [ None ]
     NameValidations        :
       - Type               : Regex
-        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "Folder name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
     ChildNodes             :
       - Id                 : Folder
@@ -103,7 +103,7 @@ Nodes:
     DataTypes              : [ Bool ]
     NameValidations        :
       - Type               : Regex
-        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointInteger
@@ -116,7 +116,7 @@ Nodes:
     DataTypes              : [ Int32, Int64, Int16, Int8, UInt32, UInt64, UInt16, UInt8 ]
     NameValidations        :
       - Type               : Regex
-        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointFloat
@@ -129,7 +129,7 @@ Nodes:
     DataTypes              : [ Float64, Float32 ]
     NameValidations        :
       - Type               : Regex
-        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointDateTime
@@ -142,7 +142,7 @@ Nodes:
     DataTypes              : [ DateTime ]
     NameValidations        :
       - Type               : Regex
-        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointString
@@ -155,7 +155,7 @@ Nodes:
     DataTypes              : [ String ]
     NameValidations        :
       - Type               : Regex
-        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
   - Id                     : DataPointBinary
@@ -168,7 +168,7 @@ Nodes:
     DataTypes              : [ Binary ]
     NameValidations        :
       - Type               : Regex
-        Pattern            : '[^\x00-\x1f\x7f]{1,256}'
+        Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
 
 PropertyCategories:

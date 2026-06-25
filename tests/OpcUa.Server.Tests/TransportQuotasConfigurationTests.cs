@@ -1,4 +1,4 @@
-using System;
+using System.Collections.Generic;
 using AwesomeAssertions;
 using Xunit;
 
@@ -47,94 +47,80 @@ public class TransportQuotasConfiguration_Defaults
         => TransportQuotasConfiguration.DefaultMaxSessionTimeout.Should().Be(600_000);
 }
 
-public sealed class TransportQuotasConfiguration_EnvironmentVariables : IDisposable
+public sealed class TransportQuotasConfiguration_EnvironmentVariables
 {
-    public void Dispose()
-    {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxStringLengthEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxByteStringLengthEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxArrayLengthEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxMessageSizeEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxBufferSizeEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.OperationTimeoutEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSessionCountEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSubscriptionCountEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MinSessionTimeoutEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSessionTimeoutEnvVar, null);
-    }
+    private static TransportQuotasConfiguration CreateConfig(Dictionary<string, string> envVars)
+        => new(name => envVars.TryGetValue(name, out var value) ? value : null);
 
     [Fact]
     public void MaxStringLength_returns_env_var_value_when_set()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxStringLengthEnvVar, "2097152");
+        var config = CreateConfig(new() { [TransportQuotasConfiguration.MaxStringLengthEnvVar] = "2097152" });
 
-        TransportQuotasConfiguration.MaxStringLength.Should().Be(2_097_152);
+        config.MaxStringLength.Should().Be(2_097_152);
     }
 
     [Fact]
     public void MaxStringLength_returns_default_when_env_var_is_invalid()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxStringLengthEnvVar, "not-a-number");
+        var config = CreateConfig(new() { [TransportQuotasConfiguration.MaxStringLengthEnvVar] = "not-a-number" });
 
-        TransportQuotasConfiguration.MaxStringLength.Should().Be(TransportQuotasConfiguration.DefaultMaxStringLength);
+        config.MaxStringLength.Should().Be(TransportQuotasConfiguration.DefaultMaxStringLength);
     }
 
     [Fact]
     public void MaxMessageSize_returns_env_var_value_when_set()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxMessageSizeEnvVar, "8388608");
+        var config = CreateConfig(new() { [TransportQuotasConfiguration.MaxMessageSizeEnvVar] = "8388608" });
 
-        TransportQuotasConfiguration.MaxMessageSize.Should().Be(8_388_608);
+        config.MaxMessageSize.Should().Be(8_388_608);
     }
 
     [Fact]
     public void MaxSessionCount_returns_env_var_value_when_set()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSessionCountEnvVar, "50");
+        var config = CreateConfig(new() { [TransportQuotasConfiguration.MaxSessionCountEnvVar] = "50" });
 
-        TransportQuotasConfiguration.MaxSessionCount.Should().Be(50);
+        config.MaxSessionCount.Should().Be(50);
     }
 
     [Fact]
     public void MaxSubscriptionCount_returns_env_var_value_when_set()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSubscriptionCountEnvVar, "250");
+        var config = CreateConfig(new() { [TransportQuotasConfiguration.MaxSubscriptionCountEnvVar] = "250" });
 
-        TransportQuotasConfiguration.MaxSubscriptionCount.Should().Be(250);
+        config.MaxSubscriptionCount.Should().Be(250);
     }
 
     [Fact]
     public void OperationTimeout_returns_env_var_value_when_set()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.OperationTimeoutEnvVar, "60000");
+        var config = CreateConfig(new() { [TransportQuotasConfiguration.OperationTimeoutEnvVar] = "60000" });
 
-        TransportQuotasConfiguration.OperationTimeout.Should().Be(60_000);
+        config.OperationTimeout.Should().Be(60_000);
     }
 
     [Fact]
     public void MaxSessionTimeout_returns_env_var_value_when_set()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSessionTimeoutEnvVar, "300000");
+        var config = CreateConfig(new() { [TransportQuotasConfiguration.MaxSessionTimeoutEnvVar] = "300000" });
 
-        TransportQuotasConfiguration.MaxSessionTimeout.Should().Be(300_000);
+        config.MaxSessionTimeout.Should().Be(300_000);
     }
 
     [Fact]
     public void MinSessionTimeout_returns_env_var_value_when_set()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MinSessionTimeoutEnvVar, "5000");
+        var config = CreateConfig(new() { [TransportQuotasConfiguration.MinSessionTimeoutEnvVar] = "5000" });
 
-        TransportQuotasConfiguration.MinSessionTimeout.Should().Be(5_000);
+        config.MinSessionTimeout.Should().Be(5_000);
     }
 }
 
-public sealed class OpcUaSetup_CreateConfiguration_TransportQuotas : IDisposable
+public sealed class OpcUaSetup_CreateConfiguration_TransportQuotas
 {
-    public void Dispose()
-    {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxStringLengthEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxMessageSizeEnvVar, null);
-    }
+    private static TransportQuotasConfiguration CreateConfig(Dictionary<string, string>? envVars = null)
+        => new(name => envVars is not null && envVars.TryGetValue(name, out var value) ? value : null);
 
     private static OpcUaServerDataPortProperties CreateDefaultProperties()
         => new(new OpcUaServerDataPortCommunication());
@@ -142,7 +128,7 @@ public sealed class OpcUaSetup_CreateConfiguration_TransportQuotas : IDisposable
     [Fact]
     public void TransportQuotas_are_explicitly_set_with_default_values()
     {
-        var configuration = OpcUaSetup.CreateConfiguration(CreateDefaultProperties());
+        var configuration = OpcUaSetup.CreateConfiguration(CreateDefaultProperties(), CreateConfig());
 
         configuration.TransportQuotas.MaxStringLength.Should().Be(TransportQuotasConfiguration.DefaultMaxStringLength);
         configuration.TransportQuotas.MaxByteStringLength.Should().Be(TransportQuotasConfiguration.DefaultMaxByteStringLength);
@@ -157,7 +143,7 @@ public sealed class OpcUaSetup_CreateConfiguration_TransportQuotas : IDisposable
     {
         var properties = new OpcUaServerDataPortProperties(new OpcUaServerDataPortCommunication { TransportQuotas = false });
 
-        var configuration = OpcUaSetup.CreateConfiguration(properties);
+        var configuration = OpcUaSetup.CreateConfiguration(properties, CreateConfig());
 
         configuration.TransportQuotas.Should().BeNull();
     }
@@ -165,10 +151,13 @@ public sealed class OpcUaSetup_CreateConfiguration_TransportQuotas : IDisposable
     [Fact]
     public void TransportQuotas_respects_environment_variable_overrides()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxStringLengthEnvVar, "2097152");
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxMessageSizeEnvVar, "8388608");
+        var config = CreateConfig(new()
+        {
+            [TransportQuotasConfiguration.MaxStringLengthEnvVar] = "2097152",
+            [TransportQuotasConfiguration.MaxMessageSizeEnvVar] = "8388608",
+        });
 
-        var configuration = OpcUaSetup.CreateConfiguration(CreateDefaultProperties());
+        var configuration = OpcUaSetup.CreateConfiguration(CreateDefaultProperties(), config);
 
         configuration.TransportQuotas.MaxStringLength.Should().Be(2_097_152);
         configuration.TransportQuotas.MaxMessageSize.Should().Be(8_388_608);
@@ -176,15 +165,10 @@ public sealed class OpcUaSetup_CreateConfiguration_TransportQuotas : IDisposable
     }
 }
 
-public sealed class OpcUaSetup_CreateConfiguration_ServerLimits : IDisposable
+public sealed class OpcUaSetup_CreateConfiguration_ServerLimits
 {
-    public void Dispose()
-    {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSessionCountEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSubscriptionCountEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MinSessionTimeoutEnvVar, null);
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSessionTimeoutEnvVar, null);
-    }
+    private static TransportQuotasConfiguration CreateConfig(Dictionary<string, string>? envVars = null)
+        => new(name => envVars is not null && envVars.TryGetValue(name, out var value) ? value : null);
 
     private static OpcUaServerDataPortProperties CreateDefaultProperties()
         => new(new OpcUaServerDataPortCommunication());
@@ -192,7 +176,7 @@ public sealed class OpcUaSetup_CreateConfiguration_ServerLimits : IDisposable
     [Fact]
     public void ServerConfiguration_has_explicit_session_limits()
     {
-        var configuration = OpcUaSetup.CreateConfiguration(CreateDefaultProperties());
+        var configuration = OpcUaSetup.CreateConfiguration(CreateDefaultProperties(), CreateConfig());
 
         configuration.ServerConfiguration.MaxSessionCount.Should().Be(TransportQuotasConfiguration.DefaultMaxSessionCount);
         configuration.ServerConfiguration.MaxSubscriptionCount.Should().Be(TransportQuotasConfiguration.DefaultMaxSubscriptionCount);
@@ -203,10 +187,13 @@ public sealed class OpcUaSetup_CreateConfiguration_ServerLimits : IDisposable
     [Fact]
     public void ServerConfiguration_respects_environment_variable_overrides()
     {
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSessionCountEnvVar, "50");
-        Environment.SetEnvironmentVariable(TransportQuotasConfiguration.MaxSubscriptionCountEnvVar, "250");
+        var config = CreateConfig(new()
+        {
+            [TransportQuotasConfiguration.MaxSessionCountEnvVar] = "50",
+            [TransportQuotasConfiguration.MaxSubscriptionCountEnvVar] = "250",
+        });
 
-        var configuration = OpcUaSetup.CreateConfiguration(CreateDefaultProperties());
+        var configuration = OpcUaSetup.CreateConfiguration(CreateDefaultProperties(), config);
 
         configuration.ServerConfiguration.MaxSessionCount.Should().Be(50);
         configuration.ServerConfiguration.MaxSubscriptionCount.Should().Be(250);
