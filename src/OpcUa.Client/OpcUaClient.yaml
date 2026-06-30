@@ -49,6 +49,7 @@ Nodes:
             Required       : true
           - Id             : Endpoint
             Required       : true
+          - Id             : SubscriptionPublishingInterval
       - Id                 : Authentication
         Properties         :
           - Id             : UserAuthenticationType
@@ -308,6 +309,15 @@ Properties:
     Description : "The path to the certificate store or the name in case of a 'X509 Store'."
     DataType    : String
     UiControl   : TextBox
+
+  - Id          : SubscriptionPublishingInterval
+    Name        : "Subscription Publishing Interval"
+    Description : "The requested interval (in milliseconds) at which the OPC UA server sends publish responses containing notification data to the client. Lower values increase data freshness but generate more network traffic and server load."
+    DataType    : Int32
+    UiControl   : NumericUpDown
+    DefaultValue: 1000
+    MinValue    : 100
+    MaxValue    : 60000
 
   - Id          : AutoAcceptUntrustedCertificates
     Name        : "Auto Accept Untrusted Certificates"

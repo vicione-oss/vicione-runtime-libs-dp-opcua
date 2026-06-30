@@ -31,7 +31,9 @@ internal class OpcUaServerDataPortCommunicationEqualityComparer : IEqualityCompa
             && x.TrustedIssuerCertificatesStorePath == y.TrustedIssuerCertificatesStorePath
             && x.AutoAcceptUntrustedCertificates == y.AutoAcceptUntrustedCertificates
             && x.TransportQuotas == y.TransportQuotas
-            && x.SecurityPolicy == y.SecurityPolicy;
+            && x.SecurityPolicy == y.SecurityPolicy
+            && x.MinPublishingInterval == y.MinPublishingInterval
+            && x.MaxPublishingInterval == y.MaxPublishingInterval;
     }
 
     public int GetHashCode([DisallowNull] OpcUaServerDataPortCommunication obj)
@@ -56,6 +58,8 @@ internal class OpcUaServerDataPortCommunicationEqualityComparer : IEqualityCompa
         hashCode.Add(obj.AutoAcceptUntrustedCertificates);
         hashCode.Add(obj.TransportQuotas);
         hashCode.Add(obj.SecurityPolicy);
+        hashCode.Add(obj.MinPublishingInterval);
+        hashCode.Add(obj.MaxPublishingInterval);
 
         return hashCode.ToHashCode();
     }

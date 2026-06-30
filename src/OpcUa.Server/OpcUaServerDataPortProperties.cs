@@ -178,4 +178,16 @@ internal sealed class OpcUaServerDataPortProperties(OpcUaServerDataPortCommunica
             _ => throw new InvalidOperationException("Invalid security policy.")
         };
     }
+
+    internal int MinPublishingInterval
+    {
+        get => communication.MinPublishingInterval;
+        set => communication.MinPublishingInterval = value;
+    }
+
+    internal int MaxPublishingInterval
+    {
+        get => communication.MaxPublishingInterval;
+        set => communication.MaxPublishingInterval = value;
+    }
 }

@@ -2,6 +2,11 @@
 
 ## Next
 
+### Added
+
+- Add configurable `SubscriptionPublishingInterval` properties to OPC UA Client
+- Add configurable `MinPublishingInterval` and `MaxPublishingInterval` properties to OPC UA Server
+
 ### Changed
 
 - Add new icons to DataPorts

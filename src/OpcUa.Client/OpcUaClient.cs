@@ -15,7 +15,6 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
     private const int SessionTimeout = 15_000;
     private const int KeepAliveInterval = 5_000;
     private const int ReconnectInterval = 5_000;
-    private const int SubscriptionPublishingInterval = 1_000;
     private const int SubscriptionMinLifetimeInterval = 15_000;
 
     private readonly OpcUaClientDataPortProperties _properties = new(communication);
@@ -187,7 +186,7 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
                 _subscription = new(_session.DefaultSubscription)
                 {
                     PublishingEnabled = true,
-                    PublishingInterval = SubscriptionPublishingInterval,
+                    PublishingInterval = _properties.SubscriptionPublishingInterval,
                     MinLifetimeInterval = SubscriptionMinLifetimeInterval,
                 };
                 _session.AddSubscription(_subscription);

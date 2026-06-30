@@ -8,6 +8,9 @@ internal static class OpcUaSetup
 {
     internal static ApplicationConfiguration CreateConfiguration(OpcUaServerDataPortProperties properties, TransportQuotasConfiguration? quotasConfig = null)
     {
+        if (properties.MinPublishingInterval > properties.MaxPublishingInterval)
+            throw new InvalidOperationException($"MinPublishingInterval ({properties.MinPublishingInterval}) must be less than or equal to MaxPublishingInterval ({properties.MaxPublishingInterval}).");
+
         var config = quotasConfig ?? TransportQuotasConfiguration.Default;
         ServerConfiguration serverConfiguration = new();
         serverConfiguration.BaseAddresses.Add($"opc.tcp://{properties.Server}:{properties.Port.ToString(CultureInfo.InvariantCulture)}/{properties.Endpoint}");
@@ -23,6 +26,8 @@ internal static class OpcUaSetup
         serverConfiguration.MaxSubscriptionCount = config.MaxSubscriptionCount;
         serverConfiguration.MinSessionTimeout = config.MinSessionTimeout;
         serverConfiguration.MaxSessionTimeout = config.MaxSessionTimeout;
+        serverConfiguration.MinPublishingInterval = properties.MinPublishingInterval;
+        serverConfiguration.MaxPublishingInterval = properties.MaxPublishingInterval;
 
         serverConfiguration.UserTokenPolicies =
         [

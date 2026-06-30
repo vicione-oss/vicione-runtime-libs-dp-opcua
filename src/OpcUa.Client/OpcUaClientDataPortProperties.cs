@@ -35,6 +35,12 @@ internal sealed class OpcUaClientDataPortProperties(OpcUaClientDataPortCommunica
         set => communication.Endpoint = value;
     }
 
+    internal int SubscriptionPublishingInterval
+    {
+        get => communication.SubscriptionPublishingInterval;
+        set => communication.SubscriptionPublishingInterval = value;
+    }
+
     internal UserAuthenticationType UserAuthenticationType
     {
         get => communication.UserAuthenticationType switch

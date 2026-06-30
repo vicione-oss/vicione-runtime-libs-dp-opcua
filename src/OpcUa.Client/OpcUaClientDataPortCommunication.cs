@@ -14,6 +14,8 @@ public sealed record class OpcUaClientDataPortCommunication : DataPortCommunicat
     public int Port { get; set; } = 4840;
     public string Endpoint { get; set; } = string.Empty;
 
+    public int SubscriptionPublishingInterval { get; set; } = 1000;
+
     public byte UserAuthenticationType { get; set; }
 
     public string? User { get; set; }

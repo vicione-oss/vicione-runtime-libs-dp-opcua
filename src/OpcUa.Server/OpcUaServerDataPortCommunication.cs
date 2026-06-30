@@ -37,4 +37,7 @@ public sealed record class OpcUaServerDataPortCommunication : DataPortCommunicat
     public bool TransportQuotas { get; set; } = true;
 
     public byte SecurityPolicy { get; set; } = 2;
+
+    public int MinPublishingInterval { get; set; } = 100;
+    public int MaxPublishingInterval { get; set; } = 1000;
 }

@@ -1,3 +1,4 @@
+using System;
 using AwesomeAssertions;
 using Opc.Ua;
 using Xunit;
@@ -154,5 +155,84 @@ public class OpcUaSetup_CreateConfiguration_TrustedIssuerCertificates
         configuration.SecurityConfiguration.TrustedPeerCertificates.StorePath.Should().Be("/trusted/peer/certs");
         configuration.SecurityConfiguration.TrustedIssuerCertificates.StoreType.Should().Be(CertificateStoreType.X509Store);
         configuration.SecurityConfiguration.TrustedIssuerCertificates.StorePath.Should().Be("/trusted/issuer/certs");
+    }
+}
+
+public class OpcUaSetup_CreateConfiguration_PublishingInterval
+{
+    [Fact]
+    public void Default_MinPublishingInterval_is_applied()
+    {
+        OpcUaServerDataPortCommunication communication = new();
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        var configuration = OpcUaSetup.CreateConfiguration(properties);
+
+        configuration.ServerConfiguration.MinPublishingInterval.Should().Be(100);
+    }
+
+    [Fact]
+    public void Default_MaxPublishingInterval_is_applied()
+    {
+        OpcUaServerDataPortCommunication communication = new();
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        var configuration = OpcUaSetup.CreateConfiguration(properties);
+
+        configuration.ServerConfiguration.MaxPublishingInterval.Should().Be(1000);
+    }
+
+    [Fact]
+    public void Custom_MinPublishingInterval_is_applied()
+    {
+        OpcUaServerDataPortCommunication communication = new() { MinPublishingInterval = 200, };
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        var configuration = OpcUaSetup.CreateConfiguration(properties);
+
+        configuration.ServerConfiguration.MinPublishingInterval.Should().Be(200);
+    }
+
+    [Fact]
+    public void Custom_MaxPublishingInterval_is_applied()
+    {
+        OpcUaServerDataPortCommunication communication = new() { MaxPublishingInterval = 5000, };
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        var configuration = OpcUaSetup.CreateConfiguration(properties);
+
+        configuration.ServerConfiguration.MaxPublishingInterval.Should().Be(5000);
+    }
+
+    [Fact]
+    public void Min_greater_than_Max_throws_InvalidOperationException()
+    {
+        OpcUaServerDataPortCommunication communication = new()
+        {
+            MinPublishingInterval = 2000,
+            MaxPublishingInterval = 500,
+        };
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        Action act = () => OpcUaSetup.CreateConfiguration(properties);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("MinPublishingInterval (2000) must be less than or equal to MaxPublishingInterval (500).");
+    }
+
+    [Fact]
+    public void Min_equal_to_Max_does_not_throw()
+    {
+        OpcUaServerDataPortCommunication communication = new()
+        {
+            MinPublishingInterval = 1000,
+            MaxPublishingInterval = 1000,
+        };
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        var configuration = OpcUaSetup.CreateConfiguration(properties);
+
+        configuration.ServerConfiguration.MinPublishingInterval.Should().Be(1000);
+        configuration.ServerConfiguration.MaxPublishingInterval.Should().Be(1000);
     }
 }

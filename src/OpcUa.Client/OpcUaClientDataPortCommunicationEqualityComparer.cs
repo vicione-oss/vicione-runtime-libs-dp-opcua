@@ -18,6 +18,7 @@ internal class OpcUaClientDataPortCommunicationEqualityComparer : IEqualityCompa
             && x.Server == y.Server
             && x.Port == y.Port
             && x.Endpoint == y.Endpoint
+            && x.SubscriptionPublishingInterval == y.SubscriptionPublishingInterval
             && x.UserAuthenticationType == y.UserAuthenticationType
             && x.User == y.User
             && x.Password == y.Password
@@ -40,6 +41,7 @@ internal class OpcUaClientDataPortCommunicationEqualityComparer : IEqualityCompa
         hashCode.Add(obj.Server);
         hashCode.Add(obj.Port);
         hashCode.Add(obj.Endpoint);
+        hashCode.Add(obj.SubscriptionPublishingInterval);
         hashCode.Add(obj.UserAuthenticationType);
         hashCode.Add(obj.User);
         hashCode.Add(obj.Password);
