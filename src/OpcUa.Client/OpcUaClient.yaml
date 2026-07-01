@@ -6,7 +6,7 @@ Common:
   Description  : "OPC-UA Client DataPort"                                                          # required: Description of the file
   Author       : "ifm software gmbh"                                                               # required: Author of the file
   MetadataType : YAML                                                                              # required: Metadata type of the file (YAML, JSON, XML, Text, Binary, ...)
-  Namespace    : "ViciOne.DataPort.OpcUa.Client"                                                   # required: Namespace of the DataPort
+  Namespace    : "ViciOne.DataPort.OpcUa"                                                          # required: Namespace of the DataPort
 
 Root:
   Id                       : "OpcUaClientDataPort"                                                 # required: Id String to identify the root of the DataPort
