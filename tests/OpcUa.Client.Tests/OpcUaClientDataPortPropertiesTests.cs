@@ -627,3 +627,47 @@ public class OpcUaClientDataPortProperties_AutoAcceptUntrustedCertificates
         { false },
     };
 }
+
+public class OpcUaClientDataPortProperties_SubscriptionPublishingInterval
+{
+    [Theory]
+    [MemberData(nameof(Conversion))]
+    public void Getter_returns_value(int subscriptionPublishingInterval)
+    {
+        OpcUaClientDataPortProperties properties = new(new() { SubscriptionPublishingInterval = subscriptionPublishingInterval, });
+
+        properties.SubscriptionPublishingInterval.Should().Be(subscriptionPublishingInterval);
+    }
+
+    [Theory]
+    [MemberData(nameof(Conversion))]
+    public void Setter_sets_value(int subscriptionPublishingInterval)
+    {
+        OpcUaClientDataPortCommunication communication = new();
+
+        _ = new OpcUaClientDataPortProperties(communication)
+        {
+            SubscriptionPublishingInterval = subscriptionPublishingInterval,
+        };
+
+        communication.SubscriptionPublishingInterval.Should().Be(subscriptionPublishingInterval);
+    }
+
+    [Fact]
+    public void Default_value_is_1000()
+    {
+        OpcUaClientDataPortCommunication communication = new();
+
+        OpcUaClientDataPortProperties properties = new(communication);
+
+        properties.SubscriptionPublishingInterval.Should().Be(1000);
+    }
+
+    public static TheoryData<int> Conversion() => new()
+    {
+        { 100 },
+        { 500 },
+        { 1000 },
+        { 60000 },
+    };
+}

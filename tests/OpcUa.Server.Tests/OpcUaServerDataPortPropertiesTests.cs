@@ -752,3 +752,91 @@ public class OpcUaServerDataPortProperties_SecurityPolicy
             { 3, ServerSecurityPolicy.Aes256_Sha256_RsaPss_SignAndEncrypt },
         };
 }
+
+public class OpcUaServerDataPortProperties_MinPublishingInterval
+{
+    [Theory]
+    [MemberData(nameof(Conversion))]
+    public void Getter_returns_value(int minPublishingInterval)
+    {
+        OpcUaServerDataPortProperties properties = new(new() { MinPublishingInterval = minPublishingInterval, });
+
+        properties.MinPublishingInterval.Should().Be(minPublishingInterval);
+    }
+
+    [Theory]
+    [MemberData(nameof(Conversion))]
+    public void Setter_sets_value(int minPublishingInterval)
+    {
+        OpcUaServerDataPortCommunication communication = new();
+
+        _ = new OpcUaServerDataPortProperties(communication)
+        {
+            MinPublishingInterval = minPublishingInterval,
+        };
+
+        communication.MinPublishingInterval.Should().Be(minPublishingInterval);
+    }
+
+    [Fact]
+    public void Default_value_is_100()
+    {
+        OpcUaServerDataPortCommunication communication = new();
+
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        properties.MinPublishingInterval.Should().Be(100);
+    }
+
+    public static TheoryData<int> Conversion() => new()
+    {
+        { 50 },
+        { 100 },
+        { 500 },
+        { 60000 },
+    };
+}
+
+public class OpcUaServerDataPortProperties_MaxPublishingInterval
+{
+    [Theory]
+    [MemberData(nameof(Conversion))]
+    public void Getter_returns_value(int maxPublishingInterval)
+    {
+        OpcUaServerDataPortProperties properties = new(new() { MaxPublishingInterval = maxPublishingInterval, });
+
+        properties.MaxPublishingInterval.Should().Be(maxPublishingInterval);
+    }
+
+    [Theory]
+    [MemberData(nameof(Conversion))]
+    public void Setter_sets_value(int maxPublishingInterval)
+    {
+        OpcUaServerDataPortCommunication communication = new();
+
+        _ = new OpcUaServerDataPortProperties(communication)
+        {
+            MaxPublishingInterval = maxPublishingInterval,
+        };
+
+        communication.MaxPublishingInterval.Should().Be(maxPublishingInterval);
+    }
+
+    [Fact]
+    public void Default_value_is_1000()
+    {
+        OpcUaServerDataPortCommunication communication = new();
+
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        properties.MaxPublishingInterval.Should().Be(1000);
+    }
+
+    public static TheoryData<int> Conversion() => new()
+    {
+        { 100 },
+        { 1000 },
+        { 60000 },
+        { 3600000 },
+    };
+}

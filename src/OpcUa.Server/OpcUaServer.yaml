@@ -54,6 +54,8 @@ Nodes:
           - Id             : TransportQuotas
           - Id             : SecurityPolicy
             Required       : true
+          - Id             : MinPublishingInterval
+          - Id             : MaxPublishingInterval
       - Id                 : Authentication
         Properties         :
           - Id             : UserAuthenticationType
@@ -362,6 +364,24 @@ Properties:
     DataType    : Bool
     UiControl   : CheckBox
     DefaultValue: true
+
+  - Id          : MinPublishingInterval
+    Name        : "Min Publishing Interval"
+    Description : "The minimum publishing interval (in milliseconds) the server will accept from a client subscription request. If a client requests a lower interval, the server clamps it to this value. Lower values allow more responsive subscriptions but increase CPU and network utilization."
+    DataType    : Int32
+    UiControl   : NumericUpDown
+    DefaultValue: 100
+    MinValue    : 50
+    MaxValue    : 60000
+
+  - Id          : MaxPublishingInterval
+    Name        : "Max Publishing Interval"
+    Description : "The maximum publishing interval (in milliseconds) the server will accept from a client subscription request. If a client requests a higher interval, the server clamps it to this value. Higher values reduce server load but increase data latency."
+    DataType    : Int32
+    UiControl   : NumericUpDown
+    DefaultValue: 1000
+    MinValue    : 100
+    MaxValue    : 3600000
 
   - Id                 : SecurityPolicy
     Name               : "Security Policy"
