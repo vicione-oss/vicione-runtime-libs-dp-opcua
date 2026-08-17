@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Runtime.Loader;
 using System.Threading;
 using System.Threading.Tasks;
@@ -122,6 +121,10 @@ public class OpcUaClientDataPortOutgoing_
             },
         ]);
 
+        List<(Opc.Ua.NodeId NodeId, object? Value)> writtenValues = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token))
+            .Do(c => writtenValues = [.. (IEnumerable<(Opc.Ua.NodeId, object?)>)c[0]!]);
+
         var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
         await opcUaDataport.ConnectAsync(cancellation.Token);
@@ -134,12 +137,7 @@ public class OpcUaClientDataPortOutgoing_
 
         await opcUaDataport.SendAsync(0, [value], cancellation.Token);
 
-        await opcUaClient.Received(1).WriteValuesAsync(Arg.Do<IEnumerable<(Opc.Ua.NodeId, object?)>>(l =>
-        {
-            var (nodeId, value) = l.Single();
-            nodeId.Should().Be(new Opc.Ua.NodeId("ns=2;s=test"));
-            value.Should().Be(2);
-        }), cancellation.Token);
+        writtenValues.Should().BeEquivalentTo([(new Opc.Ua.NodeId("ns=2;s=test"), (object?)2),]);
     }
 
     [Fact]
@@ -193,6 +191,10 @@ public class OpcUaClientDataPortOutgoing_
             }
         ]);
 
+        List<(Opc.Ua.NodeId NodeId, object? Value)> writtenValues = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token))
+            .Do(c => writtenValues = [.. (IEnumerable<(Opc.Ua.NodeId, object?)>)c[0]!]);
+
         var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
         await opcUaDataport.ConnectAsync(cancellation.Token);
@@ -205,12 +207,7 @@ public class OpcUaClientDataPortOutgoing_
 
         await opcUaDataport.SendAsync(0, [value], cancellation.Token);
 
-        await opcUaClient.Received(1).WriteValuesAsync(Arg.Do<IEnumerable<(Opc.Ua.NodeId, object?)>>(l =>
-        {
-            var (nodeId, value) = l.Single();
-            nodeId.Should().Be(new Opc.Ua.NodeId("ns=2;s=parent/test"));
-            value.Should().Be(2);
-        }), cancellation.Token);
+        writtenValues.Should().BeEquivalentTo([(new Opc.Ua.NodeId("ns=2;s=parent/test"), (object?)2),]);
     }
 
     [Fact]
