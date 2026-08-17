@@ -211,6 +211,55 @@ public class OpcUaClientDataPortOutgoing_
     }
 
     [Fact]
+    public async Task Sends_value_after_a_reconnect_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "test",
+                }
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                ReferenceDescription = new()
+                {
+                    DisplayName = "test",
+                    NodeId = new("ns=2;s=test"),
+                }
+            },
+        ]);
+
+        List<(Opc.Ua.NodeId NodeId, object? Value)> writtenValues = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token))
+            .Do(c => writtenValues = [.. (IEnumerable<(Opc.Ua.NodeId, object?)>)c[0]!]);
+
+        var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+
+        await opcUaDataport.ConnectAsync(cancellation.Token);
+        await opcUaDataport.DisconnectAsync(cancellation.Token);
+        await opcUaDataport.ConnectAsync(cancellation.Token);
+
+        await opcUaDataport.SendAsync(0, [new() { Channel = "channel", Value = 2, },], cancellation.Token);
+
+        writtenValues.Should().BeEquivalentTo([(new Opc.Ua.NodeId("ns=2;s=test"), (object?)2),]);
+    }
+
+    [Fact]
     public async Task Maps_all_channels_on_retry_after_a_failed_connect_Async()
     {
         var communication = CreateCommunication(

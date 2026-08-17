@@ -50,6 +50,7 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         if (_client is not null)
         {
             await _instanceManager.ReleaseOpcUaClientAsync(_communication, this, cancellationToken).ConfigureAwait(false);
+            _channelNodes.Clear();
             _client = null;
         }
     }
