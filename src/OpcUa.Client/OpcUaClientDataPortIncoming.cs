@@ -30,10 +30,19 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
-        if (_client is null)
+        if (_client is not null)
+            return;
+
+        _client = await _instanceManager.GetOrRegisterOpcUaClientAsync(_communication, this, _clientLogger, cancellationToken).ConfigureAwait(false);
+
+        try
         {
-            _client = await _instanceManager.GetOrRegisterOpcUaClientAsync(_communication, this, _clientLogger, cancellationToken).ConfigureAwait(false);
             await SubscribeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await RollBackConnectAsync().ConfigureAwait(false);
+            throw;
         }
     }
 
@@ -42,6 +51,23 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
         if (_client is not null)
         {
             await _instanceManager.ReleaseOpcUaClientAsync(_communication, this, cancellationToken).ConfigureAwait(false);
+            _client = null;
+        }
+    }
+
+    private async Task RollBackConnectAsync()
+    {
+        try
+        {
+            // Without a token so that a connect cancelled by the caller is rolled back too.
+            await _instanceManager.ReleaseOpcUaClientAsync(_communication, this, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _clientLogger.LogReleaseAfterFailedConnectFailure(_communication.ApplicationName, ex);
+        }
+        finally
+        {
             _client = null;
         }
     }
