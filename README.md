@@ -8,7 +8,8 @@
 ## Tests
 
 Tests that stand up a real OPC UA server carry `[Trait("Category", "Interoperability")]` and are excluded from the
-default pipeline, which runs the fast unit tests only. Run them on demand:
+default pipeline, which runs the fast unit tests only. In CI they are the manual `dotnet Interoperability Test` job,
+available on merge request, default branch and web pipelines. Locally:
 
 ```sh
 dotnet test dp-opcua.slnx -- --filter-query "/[Category=Interoperability]" --ignore-exit-code 8
