@@ -215,6 +215,71 @@ public class OpcUaClientDataPortIncoming_
     }
 
     [Fact]
+    public async Task Subscribes_every_node_once_when_a_node_is_missing_on_the_first_connect_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    Id = Guid.Parse("2c4e3e4e-0a1a-4a2f-9a35-0b7de6b0f1a1"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel1",
+                    ],
+                    Name = "test1",
+                },
+                new()
+                {
+                    Id = Guid.Parse("5d6f2b18-9a53-4a0e-8f7c-2f0b1a3d4c5e"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel2",
+                    ],
+                    Name = "test2",
+                },
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+
+        OpcUaNode firstNode = new()
+        {
+            ReferenceDescription = new()
+            {
+                BrowseName = "test1",
+                DisplayName = "test1",
+                NodeId = new("ns=2;s=test1"),
+            },
+        };
+        OpcUaNode secondNode = new()
+        {
+            ReferenceDescription = new()
+            {
+                BrowseName = "test2",
+                DisplayName = "test2",
+                NodeId = new("ns=2;s=test2"),
+            },
+        };
+
+        IReadOnlyCollection<OpcUaNode> incompleteNodes = [firstNode,];
+        IReadOnlyCollection<OpcUaNode> completeNodes = [firstNode, secondNode,];
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(incompleteNodes, completeNodes);
+
+        var opcUaDataport = new OpcUaClientDataPortIncoming(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+
+        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should().ThrowAsync<InvalidOperationException>();
+        await opcUaDataport.ConnectAsync(cancellation.Token);
+
+        await opcUaClient.Received(1).SubscribeAsync("ns=2;s=test1", Arg.Any<Action<object?, DateTime>>(), cancellation.Token);
+        await opcUaClient.Received(1).SubscribeAsync("ns=2;s=test2", Arg.Any<Action<object?, DateTime>>(), cancellation.Token);
+    }
+
+    [Fact]
     public async Task Releases_the_client_when_connecting_fails_Async()
     {
         var communication = CreateCommunication(
