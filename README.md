@@ -5,6 +5,15 @@
 | OPC UA Client                   |    ✔️    |    ✔️    |          ❌         |
 | [OPC UA Server](#opc-ua-server) |    ✔️    |    ✔️    |          ❌         |
 
+## Tests
+
+Tests that stand up a real OPC UA server carry `[Trait("Category", "Interoperability")]` and are excluded from the
+default pipeline, which runs the fast unit tests only. Run them on demand:
+
+```sh
+dotnet test dp-opcua.slnx -- --filter-query "/[Category=Interoperability]" --ignore-exit-code 8
+```
+
 ## OPC UA Server
 
 ### Node properties
