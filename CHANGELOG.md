@@ -14,6 +14,10 @@
 - Unify namespaces in DataPort yamls
 - Update `ViciOne.TreeBuilder` to `2.1.0`
 
+### Fixed
+
+- Fix OPC UA client `TrustedPeerCertificates` not being configured (was incorrectly assigned to `TrustedIssuerCertificates`)
+
 ## 0.32.0 - 2026-05-11
 
 ### Added
