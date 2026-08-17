@@ -37,7 +37,7 @@ internal static class OpcUaSetup
 
         if (properties.TrustedCertificatesStoreType is not null)
         {
-            configuration.SecurityConfiguration.TrustedIssuerCertificates = new()
+            configuration.SecurityConfiguration.TrustedPeerCertificates = new()
             {
                 StoreType = properties.TrustedCertificatesStoreType,
                 StorePath = properties.TrustedCertificatesStorePath,
