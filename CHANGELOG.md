@@ -12,6 +12,7 @@
 - Add new icons to DataPorts
 - Update `.yaml` files format to `2.0.0` (`ViciOne.TreeBuilder`)
 - Unify namespaces in DataPort yamls
+- Update `ViciOne.TreeBuilder` to `2.1.0`
 
 ## 0.32.0 - 2026-05-11
 
