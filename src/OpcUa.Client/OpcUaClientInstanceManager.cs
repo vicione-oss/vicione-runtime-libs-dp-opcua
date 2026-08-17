@@ -39,7 +39,16 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
             }
 
             var client = _createClient(communication, logger);
-            await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                (client as IDisposable)?.Dispose();
+                throw;
+            }
 
             _clients.Add(communication, (client, [instance,]));
 
