@@ -168,6 +168,93 @@ public class OpcUaClientDataPortIncoming_
     }
 
     [Fact]
+    public async Task Subscribes_on_retry_after_a_failed_subscribe_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "test",
+                }
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                ReferenceDescription = new()
+                {
+                    BrowseName = "test",
+                    DisplayName = "test",
+                    NodeId = new("ns=2;s=test"),
+                }
+            }
+        ]);
+
+        var subscribeCalls = 0;
+        opcUaClient.SubscribeAsync(Arg.Any<Opc.Ua.NodeId>(), Arg.Any<Action<object?, DateTime>>(), cancellation.Token)
+            .Returns(_ => ++subscribeCalls == 1
+                ? Task.FromException(new InvalidOperationException("Subscribe failed."))
+                : Task.CompletedTask);
+
+        var opcUaDataport = new OpcUaClientDataPortIncoming(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+
+        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should().ThrowAsync<InvalidOperationException>();
+        await opcUaDataport.ConnectAsync(cancellation.Token);
+
+        await opcUaClient.Received(2).SubscribeAsync("ns=2;s=test", Arg.Any<Action<object?, DateTime>>(), cancellation.Token);
+    }
+
+    [Fact]
+    public async Task Releases_the_client_when_connecting_fails_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "test",
+                }
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                ReferenceDescription = new()
+                {
+                    BrowseName = "other",
+                    DisplayName = "other",
+                    NodeId = new("ns=2;s=other"),
+                }
+            }
+        ]);
+
+        var opcUaDataport = new OpcUaClientDataPortIncoming(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+
+        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should().ThrowAsync<InvalidOperationException>();
+
+        await instanceManager.Received(1).ReleaseOpcUaClientAsync(communication, opcUaDataport, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Disconnects_Async()
     {
         var communication = CreateCommunication();
