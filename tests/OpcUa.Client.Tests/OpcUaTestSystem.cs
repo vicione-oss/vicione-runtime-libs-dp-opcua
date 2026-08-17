@@ -115,6 +115,24 @@ public sealed class OpcUaTestSystem : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Closes every session the server currently holds, which is how a test provokes a client into recreating one
+    /// without taking the endpoint away. Returns how many sessions were closed, so a test can tell an effective call
+    /// from a call that found nothing to do.
+    /// </summary>
+    internal int CloseSessions()
+    {
+        var sessions = _server.CurrentInstance.SessionManager.GetSessions();
+
+        foreach (var session in sessions)
+        {
+            OperationContext context = new(session, DiagnosticsMasks.None);
+            _server.CurrentInstance.CloseSession(context, session.Id, true);
+        }
+
+        return sessions.Count;
+    }
+
     private ApplicationConfiguration CreateApplicationConfiguration()
     {
         ServerConfiguration serverConfiguration = new();

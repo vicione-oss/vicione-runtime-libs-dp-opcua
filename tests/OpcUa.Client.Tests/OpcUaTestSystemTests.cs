@@ -114,6 +114,22 @@ public sealed class OpcUaTestSystem_
         indexSwapped.Should().NotBe(indexInOrder);
     }
 
+    [Fact]
+    public async Task Closes_the_sessions_a_client_holds_Async()
+    {
+        await using var opcUa = await OpcUaTestSystem.StartAsync();
+        using var session = await ConnectAsync(opcUa);
+
+        var closed = opcUa.CloseSessions();
+
+        closed.Should().Be(1);
+
+        // The client still believes it has a session; the next request is where it finds out otherwise.
+        var act = () => Browse(session, ObjectIds.ObjectsFolder);
+
+        act.Should().Throw<ServiceResultException>().Which.StatusCode.Should().Be(StatusCodes.BadSessionIdInvalid);
+    }
+
     private static NodeId RootFolderId(ISession session) => FindChild(session, ObjectIds.ObjectsFolder, OpcUaTestNodeManager.RootFolderName);
 
     private static NodeId FindChild(ISession session, NodeId parent, string browseName)
