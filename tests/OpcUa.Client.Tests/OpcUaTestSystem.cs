@@ -36,7 +36,7 @@ public sealed class OpcUaTestSystem : IAsyncLifetime
 
     private readonly OpcUaTestSystemOptions _options;
     private readonly string _certificateDirectory = Path.Combine(Path.GetTempPath(), "dp-opcua-tests", Guid.NewGuid().ToString("N"));
-    private readonly StandardServer _server = new();
+    private readonly OpcUaTestServer _server;
 
     internal OpcUaClientDataPortCommunication Communication { get; } = new();
 
@@ -54,6 +54,7 @@ public sealed class OpcUaTestSystem : IAsyncLifetime
     private OpcUaTestSystem(OpcUaTestSystemOptions options)
     {
         _options = options;
+        _server = new(options);
 
         Communication.ApplicationName = "OPC UA Test Server";
         Communication.ApplicationUri = "urn:localhost:OPCUA:DataPortTest";
