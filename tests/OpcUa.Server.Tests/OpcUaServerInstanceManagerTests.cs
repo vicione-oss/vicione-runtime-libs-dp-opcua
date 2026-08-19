@@ -11,12 +11,6 @@ namespace ViciOne.Suite.DataPort;
 
 public class OpcUaServerInstanceManager_
 {
-    /// <summary>
-    /// No server in these tests ever listens — <see cref="IOpcUaServer"/> is substituted throughout — so the port
-    /// only has to differ between communications that are meant to differ.
-    /// </summary>
-    private const int UnboundTestPort = 55555;
-
     private readonly ILogger<IOpcUaServer> _logger = Substitute.For<ILogger<IOpcUaServer>>();
 
     private static OpcUaServerDataPortCommunication CreateCommunication(Action<OpcUaServerDataPortProperties>? configure = default, IReadOnlyCollection<Node>? nodes = null)
@@ -28,7 +22,7 @@ public class OpcUaServerInstanceManager_
             ApplicationUri = "urn:uadataport:OPCUA:Test",
             Namespace = "http://localhost/test",
             Server = "localhost",
-            Port = UnboundTestPort,
+            Port = 55555,
             Endpoint = "ua/dataport",
         };
         if (configure is not null)
