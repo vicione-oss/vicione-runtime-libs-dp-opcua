@@ -30,10 +30,19 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
-        if (_client is null)
+        if (_client is not null)
+            return;
+
+        _client = await _instanceManager.GetOrRegisterOpcUaClientAsync(_communication, this, _clientLogger, cancellationToken).ConfigureAwait(false);
+
+        try
         {
-            _client = await _instanceManager.GetOrRegisterOpcUaClientAsync(_communication, this, _clientLogger, cancellationToken).ConfigureAwait(false);
             await SubscribeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await RollBackConnectAsync().ConfigureAwait(false);
+            throw;
         }
     }
 
@@ -46,15 +55,51 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
         }
     }
 
+    private async Task RollBackConnectAsync()
+    {
+        try
+        {
+            // Without a token so that a connect cancelled by the caller is rolled back too.
+            await _instanceManager.ReleaseOpcUaClientAsync(_communication, this, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _clientLogger.LogReleaseAfterFailedConnectFailure(_communication.ApplicationName, ex);
+        }
+        finally
+        {
+            _client = null;
+        }
+    }
+
     private async Task SubscribeAsync(CancellationToken cancellationToken)
     {
         if (_client is null)
             throw new InvalidOperationException("Connection must be initialized");
 
         var browsedNodes = await _client.BrowseNodesAsync(cancellationToken);
-        var currentOpcNodes = browsedNodes;
 
-        foreach (var route in _communication.Nodes.GetRoutes())
+        // Resolving every node first keeps a failing resolution from leaving monitored items on the
+        // client, which is shared with the outgoing side and outlives the roll back.
+        foreach (var (channel, opcUaNode) in ResolveChannelNodes(_communication.Nodes.GetRoutes(), browsedNodes))
+        {
+            await _client.SubscribeAsync((NodeId)opcUaNode.ReferenceDescription.NodeId, (value, timestamp) =>
+                Received?.Invoke([new() {
+                    Channel = channel,
+                    Value = value,
+                    Timestamp = timestamp,
+                    Validity = 1,
+                }]), cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private static List<(string Channel, OpcUaNode OpcUaNode)> ResolveChannelNodes(IReadOnlyCollection<IReadOnlyCollection<INode>> routes, IReadOnlyCollection<OpcUaNode> opcNodes)
+    {
+        List<(string Channel, OpcUaNode OpcUaNode)> channelNodes = [];
+        var currentOpcNodes = opcNodes;
+
+        foreach (var route in routes)
         {
             foreach (var dataPortNode in route)
             {
@@ -67,18 +112,13 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
                 var channel = dataPortNode.AffectedChannels.SingleOrDefault()
                     ?? throw new InvalidOperationException($"Node '{dataPortNode.Name}' ({dataPortNode.Id}) has more than one affected channel.");
 
-                await _client.SubscribeAsync((NodeId)GetOpcUaNode(dataPortNode).ReferenceDescription.NodeId, (value, timestamp) =>
-                    Received?.Invoke([new() {
-                        Channel = channel,
-                        Value = value,
-                        Timestamp = timestamp,
-                        Validity = 1,
-                    }]), cancellationToken)
-                    .ConfigureAwait(false);
+                channelNodes.Add((channel, GetOpcUaNode(dataPortNode)));
             }
 
-            currentOpcNodes = browsedNodes;
+            currentOpcNodes = opcNodes;
         }
+
+        return channelNodes;
 
         OpcUaNode GetOpcUaNode(INode dataPortNode)
             => currentOpcNodes.FirstOrDefault(n => n.ReferenceDescription.DisplayName.Text == dataPortNode.Name)

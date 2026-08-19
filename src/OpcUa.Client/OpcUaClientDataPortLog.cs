@@ -16,4 +16,7 @@ internal static partial class OpcUaClientDataPortLog
 
     [LoggerMessage(3, LogLevel.Debug, "Subscription exchanged. Maybe the subscription could not be transfered after reconnect of '{ApplicationName}'.")]
     internal static partial void LogSubscriptionExchanged(this ILogger logger, string applicationName);
+
+    [LoggerMessage(4, LogLevel.Error, "Cannot release OPC UA client '{ApplicationName}' after a failed connect.")]
+    internal static partial void LogReleaseAfterFailedConnectFailure(this ILogger logger, string applicationName, Exception exception);
 }

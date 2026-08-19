@@ -39,7 +39,16 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
             }
 
             var client = _createClient(communication, logger);
-            await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                (client as IDisposable)?.Dispose();
+                throw;
+            }
 
             _clients.Add(communication, (client, [instance,]));
 
@@ -82,7 +91,14 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
         try
         {
             foreach (var (client, _) in _clients.Values)
+            {
+                // Task.Run keeps the close off the caller's synchronization context, which would
+                // otherwise deadlock against the blocking wait.
+                Task.Run(() => client.DisconnectAsync(CancellationToken.None)).GetAwaiter().GetResult();
                 (client as IDisposable)?.Dispose();
+            }
+
+            _clients.Clear();
         }
         finally
         {

@@ -17,6 +17,9 @@
 ### Fixed
 
 - Fix OPC UA client `TrustedPeerCertificates` not being configured (was incorrectly assigned to `TrustedIssuerCertificates`)
+- Fix OPC UA client outgoing data port failing to connect a second time, which made every engine stop and start cycle after the first one fail
+- Fix OPC UA client data ports staying half-connected when a connect fails part way, which made every later connect report success without subscribing to or writing any node
+- Fix OPC UA client sessions not being closed when the shared client is disposed, which left them open on the server until they timed out
 
 ## 0.32.0 - 2026-05-11
 

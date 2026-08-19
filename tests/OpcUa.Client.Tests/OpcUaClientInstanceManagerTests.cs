@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace ViciOne.Suite.DataPort;
@@ -74,6 +76,62 @@ public class OpcUaClientInstanceManager_
         client1.Should().NotBeSameAs(client2);
         await client1.Received(1).ConnectAsync(Arg.Is(cancellation.Token));
         await client2.Received(1).ConnectAsync(Arg.Is(cancellation.Token));
+    }
+
+    [Fact]
+    public async Task Does_not_register_client_that_fails_to_connect()
+    {
+        var communication = CreateCommunication();
+
+        var failingClient = Substitute.For<IOpcUaClient>();
+        failingClient.ConnectAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Connect failed."));
+        var workingClient = Substitute.For<IOpcUaClient>();
+        var clients = new Queue<IOpcUaClient>([failingClient, workingClient,]);
+
+        using OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
+        var instanceHandle = new object();
+        using CancellationTokenSource cancellation = new();
+
+        await instanceManager.Awaiting(x => x.GetOrRegisterOpcUaClientAsync(communication, instanceHandle, _logger, cancellation.Token))
+            .Should().ThrowAsync<InvalidOperationException>();
+
+        var client = await instanceManager.GetOrRegisterOpcUaClientAsync(communication, instanceHandle, _logger, cancellation.Token);
+
+        client.Should().BeSameAs(workingClient);
+        await workingClient.Received(1).ConnectAsync(Arg.Is(cancellation.Token));
+    }
+
+    [Fact]
+    public async Task Disposes_client_that_fails_to_connect()
+    {
+        var communication = CreateCommunication();
+
+        var failingClient = Substitute.For<IOpcUaClient, IDisposable>();
+        failingClient.ConnectAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Connect failed."));
+
+        using OpcUaClientInstanceManager instanceManager = new((_, _) => failingClient);
+        using CancellationTokenSource cancellation = new();
+
+        await instanceManager.Awaiting(x => x.GetOrRegisterOpcUaClientAsync(communication, new(), _logger, cancellation.Token))
+            .Should().ThrowAsync<InvalidOperationException>();
+
+        ((IDisposable)failingClient).Received(1).Dispose();
+    }
+
+    [Fact]
+    public async Task Disconnects_clients_on_dispose()
+    {
+        var communication = CreateCommunication();
+
+        var client = Substitute.For<IOpcUaClient>();
+        OpcUaClientInstanceManager instanceManager = new((_, _) => client);
+        using CancellationTokenSource cancellation = new();
+
+        _ = await instanceManager.GetOrRegisterOpcUaClientAsync(communication, new(), _logger, cancellation.Token);
+
+        instanceManager.Dispose();
+
+        await client.Received(1).DisconnectAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
