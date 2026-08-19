@@ -24,7 +24,7 @@ public class OpcUaClientDataPortIncoming_
         };
         OpcUaClientDataPortProperties properties = new(communication)
         {
-            Endpoint = "opc.tcp://localhost:4840/opc/ua",
+            Endpoint = "opc.tcp://localhost:55555/opc/ua",
             ApplicationName = "test",
             Server = "localhost",
             Password = "password",

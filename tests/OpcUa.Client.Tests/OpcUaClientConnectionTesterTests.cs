@@ -7,6 +7,7 @@ namespace ViciOne.Suite.DataPort;
 public class OpcUaClientConnectionTester_TestConnectionAsync
 {
     [Collection(OpcUaTestEnvironment.Name)]
+    [Trait("Category", "Interoperability")]
     public class Interoperability(OpcUaTestSystem opcUa)
     {
         [Fact]

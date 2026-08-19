@@ -22,7 +22,7 @@ public class OpcUaServerInstanceManager_
             ApplicationUri = "urn:uadataport:OPCUA:Test",
             Namespace = "http://localhost/test",
             Server = "localhost",
-            Port = 4840,
+            Port = 55555,
             Endpoint = "ua/dataport",
         };
         if (configure is not null)

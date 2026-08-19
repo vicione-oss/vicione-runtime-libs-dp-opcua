@@ -83,6 +83,14 @@ include:
       test: true
       test_coverage: true
       test_filter: "/[(Category!=System)&(Category!=Integration)&(Category!=Interoperability)]"
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-test@2
+    inputs:
+      name: "dotnet Interoperability Test"
+      rules: *rules_manual
+      before_script:
+        - dotnet nuget update source JFrogNuGetProxy --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
+      build_job_name: "dotnet Build+Test"
+      filter: "/[Category=Interoperability]"
   - project: 'vicione-oss/tooling/templates'
     file: '/CI-Templates/v2/dotnet.yml'
   - project: 'vicione-oss/tooling/ci-templates'
