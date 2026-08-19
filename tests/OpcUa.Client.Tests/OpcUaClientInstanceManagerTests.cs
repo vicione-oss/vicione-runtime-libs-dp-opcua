@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace ViciOne.Suite.DataPort;
@@ -83,7 +84,7 @@ public class OpcUaClientInstanceManager_
         var communication = CreateCommunication();
 
         var failingClient = Substitute.For<IOpcUaClient>();
-        failingClient.ConnectAsync(Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("Connect failed.")));
+        failingClient.ConnectAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Connect failed."));
         var workingClient = Substitute.For<IOpcUaClient>();
         var clients = new Queue<IOpcUaClient>([failingClient, workingClient,]);
 
@@ -106,7 +107,7 @@ public class OpcUaClientInstanceManager_
         var communication = CreateCommunication();
 
         var failingClient = Substitute.For<IOpcUaClient, IDisposable>();
-        failingClient.ConnectAsync(Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("Connect failed.")));
+        failingClient.ConnectAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Connect failed."));
 
         using OpcUaClientInstanceManager instanceManager = new((_, _) => failingClient);
         using CancellationTokenSource cancellation = new();
