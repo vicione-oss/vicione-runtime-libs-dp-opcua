@@ -113,11 +113,8 @@ public class OpcUaClientDataPortOutgoing_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    DisplayName = "test",
-                    NodeId = new("ns=2;s=test"),
-                }
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
             },
         ]);
 
@@ -172,20 +169,14 @@ public class OpcUaClientDataPortOutgoing_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    DisplayName = "root",
-                    NodeId = new("ns=2;s=parent"),
-                },
+                DisplayName = "root",
+                NodeId = new("ns=2;s=parent"),
                 Children =
                 [
                     new()
                     {
-                        ReferenceDescription = new()
-                        {
-                            DisplayName = "test",
-                            NodeId = new("ns=2;s=parent/test"),
-                        }
+                        DisplayName = "test",
+                        NodeId = new("ns=2;s=parent/test"),
                     },
                 ],
             }
@@ -235,11 +226,8 @@ public class OpcUaClientDataPortOutgoing_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    DisplayName = "test",
-                    NodeId = new("ns=2;s=test"),
-                }
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
             },
         ]);
 
@@ -293,19 +281,13 @@ public class OpcUaClientDataPortOutgoing_
 
         OpcUaNode firstNode = new()
         {
-            ReferenceDescription = new()
-            {
-                DisplayName = "test1",
-                NodeId = new("ns=2;s=test1"),
-            },
+            DisplayName = "test1",
+            NodeId = new("ns=2;s=test1"),
         };
         OpcUaNode secondNode = new()
         {
-            ReferenceDescription = new()
-            {
-                DisplayName = "test2",
-                NodeId = new("ns=2;s=test2"),
-            },
+            DisplayName = "test2",
+            NodeId = new("ns=2;s=test2"),
         };
 
         IReadOnlyCollection<OpcUaNode> incompleteNodes = [firstNode,];
@@ -356,11 +338,8 @@ public class OpcUaClientDataPortOutgoing_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    DisplayName = "other",
-                    NodeId = new("ns=2;s=other"),
-                },
+                DisplayName = "other",
+                NodeId = new("ns=2;s=other"),
             },
         ]);
 
@@ -402,20 +381,14 @@ public class OpcUaClientDataPortOutgoing_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    DisplayName = "root",
-                    NodeId = new("ns=2;s=parent"),
-                },
+                DisplayName = "root",
+                NodeId = new("ns=2;s=parent"),
                 Children =
                 [
                     new()
                     {
-                        ReferenceDescription = new()
-                        {
-                            DisplayName = "notTest",
-                            NodeId = new("ns=2;s=parent/test"),
-                        }
+                        DisplayName = "notTest",
+                        NodeId = new("ns=2;s=parent/test"),
                     },
                 ],
             }

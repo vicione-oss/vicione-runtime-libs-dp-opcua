@@ -104,14 +104,14 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
                 var channel = dataPortNode.AffectedChannels.SingleOrDefault()
                     ?? throw new InvalidOperationException($"Node '{dataPortNode.Name}' ({dataPortNode.Id}) has more than one affected channel.");
 
-                channelNodes.Add(channel, (NodeId)GetOpcUaNode(dataPortNode).ReferenceDescription.NodeId);
+                channelNodes.Add(channel, GetOpcUaNode(dataPortNode).NodeId);
             }
 
             currentOpcNodes = opcNodes;
         }
 
         OpcUaNode GetOpcUaNode(INode dataPortNode)
-            => currentOpcNodes.FirstOrDefault(n => n.ReferenceDescription.DisplayName.Text == dataPortNode.Name)
+            => currentOpcNodes.FirstOrDefault(n => n.DisplayName == dataPortNode.Name)
                 ?? throw new InvalidOperationException($"Cannot find node '{dataPortNode.Name}' ({dataPortNode.Id}) in OPC UA server.");
     }
 }
