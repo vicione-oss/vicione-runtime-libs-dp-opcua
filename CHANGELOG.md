@@ -21,6 +21,7 @@
 - Fix OPC UA client data ports staying half-connected when a connect fails part way, which made every later connect report success without subscribing to or writing any node
 - Fix OPC UA client sessions not being closed when the shared client is disposed, which left them open on the server until they timed out
 - Fix OPC UA client logging keep-alive failures for a data port that was disconnected on purpose, which pointed at a network fault that was not there
+- Fix OPC UA client data ports not connecting to a server that federates another server's address space
 
 ## 0.32.0 - 2026-05-11
 
