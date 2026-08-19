@@ -93,12 +93,8 @@ public class OpcUaClientDataPortIncoming_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    BrowseName = "test",
-                    DisplayName = "test",
-                    NodeId = new("ns=2;s=test"),
-                }
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
             }
         ]);
         var opcUaDataport = new OpcUaClientDataPortIncoming(communication, logger, instanceManager);
@@ -141,20 +137,14 @@ public class OpcUaClientDataPortIncoming_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    DisplayName = "parent",
-                    NodeId = new("ns=2;s=parent"),
-                },
+                DisplayName = "parent",
+                NodeId = new("ns=2;s=parent"),
                 Children =
                 [
                     new()
                     {
-                        ReferenceDescription = new()
-                        {
-                            DisplayName = "test",
-                            NodeId = new("ns=2;s=test"),
-                        }
+                        DisplayName = "test",
+                        NodeId = new("ns=2;s=test"),
                     },
                 ],
             },
@@ -190,12 +180,8 @@ public class OpcUaClientDataPortIncoming_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    BrowseName = "test",
-                    DisplayName = "test",
-                    NodeId = new("ns=2;s=test"),
-                }
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
             }
         ]);
 
@@ -248,21 +234,13 @@ public class OpcUaClientDataPortIncoming_
 
         OpcUaNode firstNode = new()
         {
-            ReferenceDescription = new()
-            {
-                BrowseName = "test1",
-                DisplayName = "test1",
-                NodeId = new("ns=2;s=test1"),
-            },
+            DisplayName = "test1",
+            NodeId = new("ns=2;s=test1"),
         };
         OpcUaNode secondNode = new()
         {
-            ReferenceDescription = new()
-            {
-                BrowseName = "test2",
-                DisplayName = "test2",
-                NodeId = new("ns=2;s=test2"),
-            },
+            DisplayName = "test2",
+            NodeId = new("ns=2;s=test2"),
         };
 
         IReadOnlyCollection<OpcUaNode> incompleteNodes = [firstNode,];
@@ -302,12 +280,8 @@ public class OpcUaClientDataPortIncoming_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    BrowseName = "other",
-                    DisplayName = "other",
-                    NodeId = new("ns=2;s=other"),
-                }
+                DisplayName = "other",
+                NodeId = new("ns=2;s=other"),
             }
         ]);
 
@@ -369,20 +343,14 @@ public class OpcUaClientDataPortIncoming_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    DisplayName = "parent",
-                    NodeId = new("ns=2;s=parent"),
-                },
+                DisplayName = "parent",
+                NodeId = new("ns=2;s=parent"),
                 Children =
                 [
                     new()
                     {
-                        ReferenceDescription = new()
-                        {
-                            DisplayName = "test",
-                            NodeId = new("ns=2;s=test"),
-                        }
+                        DisplayName = "test",
+                        NodeId = new("ns=2;s=test"),
                     },
                 ],
             },
@@ -438,20 +406,14 @@ public class OpcUaClientDataPortIncoming_
         [
             new()
             {
-                ReferenceDescription = new()
-                {
-                    DisplayName = "parent",
-                    NodeId = new("ns=2;s=parent"),
-                },
+                DisplayName = "parent",
+                NodeId = new("ns=2;s=parent"),
                 Children =
                 [
                     new()
                     {
-                        ReferenceDescription = new()
-                        {
-                            DisplayName = "notTest",
-                            NodeId = new("ns=2;s=test"),
-                        }
+                        DisplayName = "notTest",
+                        NodeId = new("ns=2;s=test"),
                     },
                 ],
             },

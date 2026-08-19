@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Opc.Ua;
 using ViciOne.ManagedEngine.ExternalCommunication;
 
 namespace ViciOne.Suite.DataPort;
@@ -83,7 +82,7 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
         // client, which is shared with the outgoing side and outlives the roll back.
         foreach (var (channel, opcUaNode) in ResolveChannelNodes(_communication.Nodes.GetRoutes(), browsedNodes))
         {
-            await _client.SubscribeAsync((NodeId)opcUaNode.ReferenceDescription.NodeId, (value, timestamp) =>
+            await _client.SubscribeAsync(opcUaNode.NodeId, (value, timestamp) =>
                 Received?.Invoke([new() {
                     Channel = channel,
                     Value = value,
@@ -121,7 +120,7 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
         return channelNodes;
 
         OpcUaNode GetOpcUaNode(INode dataPortNode)
-            => currentOpcNodes.FirstOrDefault(n => n.ReferenceDescription.DisplayName.Text == dataPortNode.Name)
+            => currentOpcNodes.FirstOrDefault(n => n.DisplayName == dataPortNode.Name)
                 ?? throw new InvalidOperationException($"Cannot find node '{dataPortNode.Name}' ({dataPortNode.Id}) in OPC UA server.");
     }
 }

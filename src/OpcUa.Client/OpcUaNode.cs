@@ -6,7 +6,8 @@ namespace ViciOne.Suite.DataPort;
 
 internal sealed class OpcUaNode
 {
-    internal required ReferenceDescription ReferenceDescription { get; init; }
+    internal required NodeId NodeId { get; init; }
+    internal required string DisplayName { get; init; }
     internal IReadOnlyCollection<OpcUaNode> Children { get; init; } = [];
 
     internal static NodeId ResolveNodeId(ExpandedNodeId nodeId, NamespaceTable namespaceUris, string nodeName)

@@ -163,7 +163,8 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
         {
             foreach (var reference in references)
             {
-                var nodeId = OpcUaNode.ResolveNodeId(reference.NodeId, _session.NamespaceUris, reference.DisplayName?.Text ?? string.Empty);
+                var displayName = reference.DisplayName?.Text ?? string.Empty;
+                var nodeId = OpcUaNode.ResolveNodeId(reference.NodeId, _session.NamespaceUris, displayName);
 
                 _session.Browse(null, null, nodeId, 0u,
                     BrowseDirection.Forward, ReferenceTypeIds.HierarchicalReferences, true,
@@ -171,7 +172,8 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
 
                 yield return new()
                 {
-                    ReferenceDescription = reference,
+                    NodeId = nodeId,
+                    DisplayName = displayName,
                     Children = [.. BrowseNodes(nextRefs)],
                 };
             }
