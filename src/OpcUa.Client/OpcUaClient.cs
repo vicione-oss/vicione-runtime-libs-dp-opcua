@@ -43,6 +43,7 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
 
                 _session = await CreateSessionAsync(configuration, _properties, cancellationToken);
 
+                _reconnectHandler?.Dispose();
                 _reconnectHandler = new(true);
                 _session.KeepAlive += OnKeepAlive;
             }
@@ -111,6 +112,9 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
                 if (_logger is not null && Utils.Logger == _logger)
                     Utils.SetLogger(new TraceEventLogger());
 
+                // Before the close, not just before the dispose: a close can still trip the keep-alive, and the reconnect that starts there would outlive the CancelReconnect below.
+                _session.KeepAlive -= OnKeepAlive;
+
                 try
                 {
                     _reconnectHandler?.CancelReconnect();
@@ -123,7 +127,7 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
                 finally
                 {
                     _reconnectHandler?.Dispose();
-                    _reconnectHandler ??= null;
+                    _reconnectHandler = null;
 
                     _session.Dispose();
                     _session = null;
