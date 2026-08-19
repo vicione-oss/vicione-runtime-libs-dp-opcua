@@ -289,8 +289,16 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
 
     public void Dispose()
     {
+        if (_session is not null)
+        {
+            _session.KeepAlive -= OnKeepAlive;
+            _session.Dispose();
+            _session = null;
+        }
+
         _reconnectHandler?.Dispose();
-        _session?.Dispose();
+        _reconnectHandler = null;
+
         _sessionSemaphore.Dispose();
     }
 }
