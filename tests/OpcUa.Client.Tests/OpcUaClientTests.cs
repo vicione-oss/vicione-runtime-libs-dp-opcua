@@ -17,7 +17,7 @@ namespace ViciOne.Suite.DataPort;
 /// </summary>
 [Collection(OpcUaTestEnvironment.Name)]
 [Trait("Category", "Interoperability")]
-public sealed class OpcUaClient_ReconnectHandlerLifetime(OpcUaTestSystem opcUa)
+public sealed class OpcUaClient_OnKeepAlive(OpcUaTestSystem opcUa)
 {
     [Fact]
     public async Task Does_not_log_a_keep_alive_failure_after_a_disconnect_Async()
