@@ -53,7 +53,7 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
         }
     }
 
-    private void OnKeepAlive(ISession session, KeepAliveEventArgs e)
+    internal void OnKeepAlive(ISession session, KeepAliveEventArgs e)
     {
         try
         {
