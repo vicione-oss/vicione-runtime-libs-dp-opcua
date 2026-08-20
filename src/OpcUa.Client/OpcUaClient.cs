@@ -17,6 +17,8 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
     private const int ReconnectInterval = 5_000;
     private const int SubscriptionMinLifetimeInterval = 15_000;
 
+    internal const int MaxDepth = 64;
+
     private readonly OpcUaClientDataPortProperties _properties = new(communication);
     private readonly ILogger<IOpcUaClient>? _logger = logger;
     private readonly SemaphoreSlim _sessionSemaphore = new(1, 1);
@@ -149,35 +151,91 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
             if (_session is null)
                 throw new InvalidOperationException("OPC UA client session is not initialized.");
 
-            _session.Browse(null, null, ObjectIds.ObjectsFolder, 0u, BrowseDirection.Forward, ReferenceTypeIds.HierarchicalReferences, true,
-                (uint)NodeClass.Variable | (uint)NodeClass.Object | (uint)NodeClass.Method, out _, out var references);
-
-            return [.. BrowseNodes(references)];
+            return await BrowseAddressSpaceAsync(_session, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _sessionSemaphore.Release();
         }
+    }
 
-        IEnumerable<OpcUaNode> BrowseNodes(ReferenceDescriptionCollection references)
+    internal Task<IReadOnlyCollection<OpcUaNode>> BrowseAddressSpaceAsync(ISession session, CancellationToken cancellationToken)
+        => BrowseChildrenAsync(session, [(ObjectIds.ObjectsFolder, BrowseNames.ObjectsFolder),], cancellationToken);
+
+    /// <summary>
+    /// Browses the node <paramref name="currentPath"/> ends at. A node that is already on that path would be browsed
+    /// forever, so it is left out; a node reachable through two paths is not a cycle and is still mirrored under both.
+    /// The path is mutated as the recursion descends, which only holds while the children are browsed one at a time.
+    /// </summary>
+    private async Task<IReadOnlyCollection<OpcUaNode>> BrowseChildrenAsync(ISession session, List<(NodeId NodeId, string DisplayName)> currentPath, CancellationToken cancellationToken)
+    {
+        var references = await BrowseReferencesAsync(session, currentPath[^1].NodeId, cancellationToken).ConfigureAwait(false);
+
+        List<OpcUaNode> nodes = new(references.Count);
+
+        foreach (var reference in references)
         {
-            foreach (var reference in references)
+            var child = ResolveChild(reference, session.NamespaceUris);
+
+            if (IsOnPath(currentPath, child.NodeId))
             {
-                var displayName = reference.DisplayName?.Text ?? string.Empty;
-                var nodeId = OpcUaNode.ResolveNodeId(reference.NodeId, _session.NamespaceUris, displayName);
-
-                _session.Browse(null, null, nodeId, 0u,
-                    BrowseDirection.Forward, ReferenceTypeIds.HierarchicalReferences, true,
-                    (uint)NodeClass.Variable | (uint)NodeClass.Object | (uint)NodeClass.Method, out _, out var nextRefs);
-
-                yield return new()
-                {
-                    NodeId = nodeId,
-                    DisplayName = displayName,
-                    Children = [.. BrowseNodes(nextRefs)],
-                };
+                _logger?.LogBrowseCycleSkipped(_properties.ApplicationName, child.DisplayName, FormatPath(currentPath));
+                continue;
             }
+
+            ThrowIfTooDeep(currentPath, child.DisplayName);
+
+            currentPath.Add(child);
+
+            nodes.Add(new()
+            {
+                NodeId = child.NodeId,
+                DisplayName = child.DisplayName,
+                Children = await BrowseChildrenAsync(session, currentPath, cancellationToken).ConfigureAwait(false),
+            });
+
+            currentPath.RemoveAt(currentPath.Count - 1);
         }
+
+        return nodes;
+    }
+
+    private static (NodeId NodeId, string DisplayName) ResolveChild(ReferenceDescription reference, NamespaceTable namespaceUris)
+    {
+        var displayName = reference.DisplayName?.Text ?? string.Empty;
+
+        return (OpcUaNode.ResolveNodeId(reference.NodeId, namespaceUris, displayName), displayName);
+    }
+
+    private static bool IsOnPath(List<(NodeId NodeId, string DisplayName)> currentPath, NodeId nodeId) => currentPath.Exists(entry => nodeId.Equals(entry.NodeId));
+
+    private static void ThrowIfTooDeep(List<(NodeId NodeId, string DisplayName)> currentPath, string displayName)
+    {
+        var childDepth = currentPath.Count;
+
+        if (childDepth <= MaxDepth)
+            return;
+
+        throw new InvalidOperationException($"OPC UA nodes more than {MaxDepth} levels below the Objects folder are not browsed. The node '{displayName}' below '{FormatPath(currentPath)}' is deeper than that.");
+    }
+
+    private static string FormatPath(List<(NodeId NodeId, string DisplayName)> currentPath) => string.Join('/', currentPath.Select(entry => entry.DisplayName));
+
+    /// <summary>
+    /// A server is free to answer a browse with only part of a node's references and a continuation point for the
+    /// rest, whatever maximum the request asks for, which is why a plain browse is not enough. A point left behind by
+    /// a cancelled browse is the server's to time out.
+    /// </summary>
+    private static async Task<ReferenceDescriptionCollection> BrowseReferencesAsync(ISession session, NodeId nodeId, CancellationToken cancellationToken)
+    {
+        var (references, errors) = await session.ManagedBrowseAsync(null, null, [nodeId,], 0u, BrowseDirection.Forward,
+            ReferenceTypeIds.HierarchicalReferences, true,
+            (uint)NodeClass.Variable | (uint)NodeClass.Object | (uint)NodeClass.Method, cancellationToken).ConfigureAwait(false);
+
+        if (ServiceResult.IsBad(errors[0]))
+            throw new InvalidOperationException($"Cannot browse OPC UA node '{nodeId}': {errors[0]}.");
+
+        return references[0];
     }
 
     public async Task SubscribeAsync(NodeId nodeId, Action<object?, DateTime> callback, CancellationToken cancellationToken)
