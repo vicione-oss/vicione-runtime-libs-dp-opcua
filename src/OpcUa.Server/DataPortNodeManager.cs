@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Opc.Ua;
 using Opc.Ua.Server;
 using DataPortNode = ViciOne.Suite.DataPort.INode;
@@ -164,15 +165,68 @@ internal sealed class DataPortNodeManager : NodeManager
         if (value is string)
             return true;
 
-        if (value is IComparable comparable)
+        return IsAtLeast(value, min?.Value) && IsAtMost(value, max?.Value);
+    }
+
+    private static bool IsAtLeast(object value, object? minimum)
+        => minimum is null || (TryCompare(value, minimum, out var comparison) && comparison >= 0);
+
+    private static bool IsAtMost(object value, object? maximum)
+        => maximum is null || (TryCompare(value, maximum, out var comparison) && comparison <= 0);
+
+    // Limits come from the configuration and values come off the wire, so the same number can arrive
+    // as two different CLR types, and IComparable.CompareTo throws on a foreign one. A limit that is
+    // neither a number nor of the value's own type cannot be evaluated at all; refusing the write is
+    // safer than accepting a value whose limit was never checked.
+    private static bool TryCompare(object value, object limit, out int comparison)
+    {
+        if (TryConvertToDecimal(value, out var exactValue) && TryConvertToDecimal(limit, out var exactLimit))
         {
-            if (min?.Value is not null && comparable.CompareTo(min.Value) < 0)
-                return false;
-            if (max?.Value is not null && comparable.CompareTo(max.Value) > 0)
-                return false;
+            comparison = exactValue.CompareTo(exactLimit);
+            return true;
         }
 
-        return true;
+        if (TryConvertToDouble(value, out var number) && TryConvertToDouble(limit, out var limitNumber))
+        {
+            comparison = number.CompareTo(limitNumber);
+            return true;
+        }
+
+        if (value.GetType() == limit.GetType() && value is IComparable comparable)
+        {
+            comparison = comparable.CompareTo(limit);
+            return true;
+        }
+
+        comparison = 0;
+        return false;
+    }
+
+    // decimal holds every integral type without loss, where double rounds anything past 2^53. It
+    // cannot carry the comparison on its own: float and double reach this code carrying NaN, infinity
+    // and a range decimal has no room for, and every one of those makes the conversion throw.
+    private static bool TryConvertToDecimal(object value, out decimal number)
+    {
+        if (value is byte or sbyte or short or ushort or int or uint or long or ulong or decimal)
+        {
+            number = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        number = 0;
+        return false;
+    }
+
+    private static bool TryConvertToDouble(object value, out double number)
+    {
+        if (value is float or double || TryConvertToDecimal(value, out _))
+        {
+            number = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        number = 0;
+        return false;
     }
 
     protected override void Dispose(bool disposing)
