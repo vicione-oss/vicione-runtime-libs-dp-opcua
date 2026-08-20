@@ -13,11 +13,11 @@ using Opc.Ua.Server;
 
 namespace ViciOne.Suite.DataPort;
 
-internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication, ILogger<IOpcUaServer> logger) : StandardServer, IOpcUaServer
+internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication, ILogger<IOpcUaServer> logger, TimeProvider? timeProvider = null) : StandardServer, IOpcUaServer
 {
     private readonly OpcUaServerDataPortProperties _properties = new(communication);
     private readonly Dictionary<Guid, Node> _nodes = [];
-    private readonly LoginAttemptTracker _loginAttemptTracker = new();
+    private readonly LoginAttemptTracker _loginAttemptTracker = new(timeProvider);
     private DataPortNodeManager? _nodeManager;
 
     public event Action<string, DateTime, object> ReceiveValue

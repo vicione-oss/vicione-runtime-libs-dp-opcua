@@ -1,6 +1,9 @@
+using System;
+using System.Linq;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Time.Testing;
 using Opc.Ua;
 using Xunit;
 
@@ -8,7 +11,7 @@ namespace ViciOne.Suite.DataPort;
 
 public class OpcUaServer_VerifyPassword_Logging
 {
-    private static OpcUaServer CreateServer(FakeLogger<IOpcUaServer> logger, string user = "admin", string password = "secret")
+    private static OpcUaServer CreateServer(FakeLogger<IOpcUaServer> logger, string user = "admin", string password = "secret", TimeProvider? timeProvider = null)
     {
         OpcUaServerDataPortCommunication communication = new()
         {
@@ -18,7 +21,7 @@ public class OpcUaServer_VerifyPassword_Logging
             Nodes = [],
         };
 
-        return new OpcUaServer(communication, logger);
+        return new OpcUaServer(communication, logger, timeProvider);
     }
 
     private static UserNameIdentityToken CreateToken(string user, string password) => new()
@@ -42,6 +45,47 @@ public class OpcUaServer_VerifyPassword_Logging
             e.Message.Contains("Failed authentication attempt") &&
             e.Message.Contains("admin") &&
             e.Message.Contains("session-1"));
+    }
+
+    [Fact]
+    public void Does_not_log_a_lockout_while_the_account_is_still_unlocked()
+    {
+        FakeLogger<IOpcUaServer> logger = new();
+        using var server = CreateServer(logger);
+        var token = CreateToken("admin", "wrong");
+
+        var act = () => server.VerifyPassword(token, "session-1");
+
+        act.Should().Throw<ServiceResultException>();
+
+        var log = logger.Collector.GetSnapshot();
+
+        log.Should().ContainSingle(e => e.Message.Contains("Failed authentication attempt"));
+        log.Should().NotContain(e => e.Message.Contains("is locked"));
+    }
+
+    [Fact]
+    public void Logs_a_lockout_on_the_failed_login_that_locks_the_account()
+    {
+        FakeLogger<IOpcUaServer> logger = new();
+        FakeTimeProvider timeProvider = new();
+        using var server = CreateServer(logger, timeProvider: timeProvider);
+        var token = CreateToken("admin", "wrong");
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            // Outwait the throttling delay the previous failure imposed.
+            timeProvider.Advance(TimeSpan.FromMinutes(1));
+
+            var act = () => server.VerifyPassword(token, "session-1");
+
+            act.Should().Throw<ServiceResultException>();
+        }
+
+        var log = logger.Collector.GetSnapshot();
+
+        log.Where(e => e.Message.Contains("Failed authentication attempt")).Should().HaveCount(5);
+        log.Should().ContainSingle(e => e.Level == LogLevel.Warning && e.Message.Contains("is locked"));
     }
 
     [Fact]
