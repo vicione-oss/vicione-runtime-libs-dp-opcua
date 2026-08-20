@@ -12,6 +12,7 @@
 - Add new icons to DataPorts
 - Update `.yaml` files format to `2.0.0` (`ViciOne.TreeBuilder`)
 - Unify namespaces in DataPort yamls
+- Limit the OPC UA client browse to the `MaxDepth` of `64` levels declared for the DataPort node tree; a server nesting deeper now fails the data port connect with an error naming the node and the path down to it
 - Update `ViciOne.TreeBuilder` to `2.1.0`
 
 ### Fixed
@@ -22,6 +23,8 @@
 - Fix OPC UA client sessions not being closed when the shared client is disposed, which left them open on the server until they timed out
 - Fix OPC UA client logging keep-alive failures for a data port that was disconnected on purpose, which pointed at a network fault that was not there
 - Fix OPC UA client data ports not connecting to a server that federates another server's address space
+- Fix OPC UA client reading only the first page of a folder's references while browsing, which made every node configured below a large folder fail to connect as if the server did not have it
+- Fix OPC UA client browsing an address space whose hierarchy contains a cycle until the recursion overflowed the stack, which killed the process and every other data port running in it
 
 ## 0.32.0 - 2026-05-11
 
