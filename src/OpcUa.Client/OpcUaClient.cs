@@ -175,26 +175,22 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
 
         foreach (var reference in references)
         {
-            var displayName = reference.DisplayName?.Text ?? string.Empty;
-            var nodeId = OpcUaNode.ResolveNodeId(reference.NodeId, session.NamespaceUris, displayName);
+            var child = ResolveChild(reference, session.NamespaceUris);
 
-            if (currentPath.Exists(entry => nodeId.Equals(entry.NodeId)))
+            if (IsOnPath(currentPath, child.NodeId))
             {
-                _logger?.LogBrowseCycleSkipped(_properties.ApplicationName, displayName, FormatPath(currentPath));
+                _logger?.LogBrowseCycleSkipped(_properties.ApplicationName, child.DisplayName, FormatPath(currentPath));
                 continue;
             }
 
-            var childDepth = currentPath.Count;
+            ThrowIfTooDeep(currentPath, child.DisplayName);
 
-            if (childDepth > MaxDepth)
-                throw new InvalidOperationException($"OPC UA nodes more than {MaxDepth} levels below the Objects folder are not browsed. The node '{displayName}' below '{FormatPath(currentPath)}' is deeper than that.");
-
-            currentPath.Add((nodeId, displayName));
+            currentPath.Add(child);
 
             nodes.Add(new()
             {
-                NodeId = nodeId,
-                DisplayName = displayName,
+                NodeId = child.NodeId,
+                DisplayName = child.DisplayName,
                 Children = await BrowseChildrenAsync(session, currentPath, cancellationToken).ConfigureAwait(false),
             });
 
@@ -202,6 +198,25 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
         }
 
         return nodes;
+    }
+
+    private static (NodeId NodeId, string DisplayName) ResolveChild(ReferenceDescription reference, NamespaceTable namespaceUris)
+    {
+        var displayName = reference.DisplayName?.Text ?? string.Empty;
+
+        return (OpcUaNode.ResolveNodeId(reference.NodeId, namespaceUris, displayName), displayName);
+    }
+
+    private static bool IsOnPath(List<(NodeId NodeId, string DisplayName)> currentPath, NodeId nodeId) => currentPath.Exists(entry => nodeId.Equals(entry.NodeId));
+
+    private static void ThrowIfTooDeep(List<(NodeId NodeId, string DisplayName)> currentPath, string displayName)
+    {
+        var childDepth = currentPath.Count;
+
+        if (childDepth <= MaxDepth)
+            return;
+
+        throw new InvalidOperationException($"OPC UA nodes more than {MaxDepth} levels below the Objects folder are not browsed. The node '{displayName}' below '{FormatPath(currentPath)}' is deeper than that.");
     }
 
     private static string FormatPath(List<(NodeId NodeId, string DisplayName)> currentPath) => string.Join('/', currentPath.Select(entry => entry.DisplayName));
