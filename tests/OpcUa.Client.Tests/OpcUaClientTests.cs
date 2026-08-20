@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AwesomeAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
 using Opc.Ua;
@@ -122,6 +123,35 @@ public sealed class OpcUaClient_BrowseNodesAsync
             var folder = Flatten(nodes).Should().ContainSingle(node => node.DisplayName == OpcUaTestNodeManager.OversizedFolderName).Which;
 
             folder.Children.Should().HaveCount(OpcUaTestNodeManager.OversizedFolderChildCount);
+        }
+        finally
+        {
+            await client.DisconnectAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task Stops_at_a_node_that_is_already_on_the_browsed_path_Async()
+    {
+        await using var opcUa = await OpcUaTestSystem.StartAsync(options => options.CyclicReferences = true);
+        FakeLogger<IOpcUaClient> logger = new();
+        using OpcUaClient client = new(opcUa.Communication, logger);
+
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+
+        try
+        {
+            var nodes = await client.BrowseNodesAsync(TestContext.Current.CancellationToken);
+
+            var cycleEnd = Flatten(nodes).Should().ContainSingle(node => node.DisplayName == OpcUaTestNodeManager.SecondCycleFolderName).Which;
+
+            cycleEnd.Children.Should().BeEmpty();
+
+            logger.Collector.GetSnapshot().Should().ContainSingle(record =>
+                record.Level == LogLevel.Warning &&
+                record.Message.Contains(OpcUaTestNodeManager.FirstCycleFolderName, StringComparison.Ordinal) &&
+                record.Message.Contains(opcUa.Communication.ApplicationName, StringComparison.Ordinal) &&
+                record.Message.Contains("already on that path", StringComparison.Ordinal));
         }
         finally
         {

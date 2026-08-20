@@ -149,7 +149,9 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
             if (_session is null)
                 throw new InvalidOperationException("OPC UA client session is not initialized.");
 
-            return await BrowseChildrenAsync(_session, ObjectIds.ObjectsFolder, cancellationToken).ConfigureAwait(false);
+            List<(NodeId NodeId, string DisplayName)> currentPath = [(ObjectIds.ObjectsFolder, BrowseNames.ObjectsFolder),];
+
+            return await BrowseChildrenAsync(_session, currentPath, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -157,27 +159,44 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
         }
     }
 
-    private static async Task<IReadOnlyCollection<OpcUaNode>> BrowseChildrenAsync(ISession session, NodeId nodeId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Browses the node <paramref name="currentPath"/> ends at. A node that is already on that path would be browsed
+    /// forever, so it is left out; a node reachable through two paths is not a cycle and is still mirrored under both.
+    /// The path is mutated as the recursion descends, which only holds while the children are browsed one at a time.
+    /// </summary>
+    private async Task<IReadOnlyCollection<OpcUaNode>> BrowseChildrenAsync(ISession session, List<(NodeId NodeId, string DisplayName)> currentPath, CancellationToken cancellationToken)
     {
-        var references = await BrowseReferencesAsync(session, nodeId, cancellationToken).ConfigureAwait(false);
+        var references = await BrowseReferencesAsync(session, currentPath[^1].NodeId, cancellationToken).ConfigureAwait(false);
 
         List<OpcUaNode> nodes = new(references.Count);
 
         foreach (var reference in references)
         {
             var displayName = reference.DisplayName?.Text ?? string.Empty;
-            var childNodeId = OpcUaNode.ResolveNodeId(reference.NodeId, session.NamespaceUris, displayName);
+            var nodeId = OpcUaNode.ResolveNodeId(reference.NodeId, session.NamespaceUris, displayName);
+
+            if (currentPath.Exists(entry => nodeId.Equals(entry.NodeId)))
+            {
+                _logger?.LogBrowseCycleSkipped(_properties.ApplicationName, displayName, FormatPath(currentPath));
+                continue;
+            }
+
+            currentPath.Add((nodeId, displayName));
 
             nodes.Add(new()
             {
-                NodeId = childNodeId,
+                NodeId = nodeId,
                 DisplayName = displayName,
-                Children = await BrowseChildrenAsync(session, childNodeId, cancellationToken).ConfigureAwait(false),
+                Children = await BrowseChildrenAsync(session, currentPath, cancellationToken).ConfigureAwait(false),
             });
+
+            currentPath.RemoveAt(currentPath.Count - 1);
         }
 
         return nodes;
     }
+
+    private static string FormatPath(List<(NodeId NodeId, string DisplayName)> currentPath) => string.Join('/', currentPath.Select(entry => entry.DisplayName));
 
     /// <summary>
     /// A server is free to answer a browse with only part of a node's references and a continuation point for the

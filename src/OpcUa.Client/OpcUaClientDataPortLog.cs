@@ -19,4 +19,7 @@ internal static partial class OpcUaClientDataPortLog
 
     [LoggerMessage(4, LogLevel.Error, "Cannot release OPC UA client '{ApplicationName}' after a failed connect.")]
     internal static partial void LogReleaseAfterFailedConnectFailure(this ILogger logger, string applicationName, Exception exception);
+
+    [LoggerMessage(5, LogLevel.Warning, "OPC UA client '{ApplicationName}' skips node '{DisplayName}' below '{BrowsedPath}': it is already on that path.")]
+    internal static partial void LogBrowseCycleSkipped(this ILogger logger, string applicationName, string displayName, string browsedPath);
 }

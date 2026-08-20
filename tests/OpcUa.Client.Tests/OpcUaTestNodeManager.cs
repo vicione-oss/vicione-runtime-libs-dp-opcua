@@ -36,6 +36,9 @@ internal sealed class OpcUaTestNodeManager : CustomNodeManager2
     /// <summary>How many references the server hands back per browse response while the oversized folder is on.</summary>
     internal const uint MaxReferencesPerBrowse = 10;
 
+    internal const string FirstCycleFolderName = "FirstCycleFolder";
+    internal const string SecondCycleFolderName = "SecondCycleFolder";
+
     internal const string AbsoluteReferenceSourceName = "AbsoluteReferenceSource";
     internal const string AbsoluteReferenceTargetName = "AbsoluteReferenceTarget";
 
@@ -117,6 +120,14 @@ internal sealed class OpcUaTestNodeManager : CustomNodeManager2
                     var name = $"Child{i.ToString("D2", CultureInfo.InvariantCulture)}";
                     CreateVariable(folder, name, name);
                 }
+            }
+
+            if (_options.CyclicReferences)
+            {
+                var first = CreateFolder(root, FirstCycleFolderName, FirstCycleFolderName);
+                var second = CreateFolder(first, SecondCycleFolderName, SecondCycleFolderName);
+
+                second.AddReference(ReferenceTypeIds.Organizes, false, first.NodeId);
             }
 
             if (_options.AbsoluteReference)
