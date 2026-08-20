@@ -122,7 +122,7 @@ public sealed class OpcUaClient_BrowseNodesAsync
         {
             var nodes = await client.BrowseNodesAsync(TestContext.Current.CancellationToken);
 
-            var folder = Flatten(nodes).Should().ContainSingle(node => node.DisplayName == OpcUaTestNodeManager.OversizedFolderName).Which;
+            var folder = Flatten(nodes).Should().ContainSingle(node => node.DisplayName == OpcUaTestNodeManager.OversizedFolderName).Subject;
 
             folder.Children.Should().HaveCount(OpcUaTestNodeManager.OversizedFolderChildCount);
         }
@@ -188,7 +188,7 @@ public sealed class OpcUaClient_BrowseNodesAsync
         {
             var nodes = await client.BrowseNodesAsync(TestContext.Current.CancellationToken);
 
-            var cycleEnd = Flatten(nodes).Should().ContainSingle(node => node.DisplayName == OpcUaTestNodeManager.SecondCycleFolderName).Which;
+            var cycleEnd = Flatten(nodes).Should().ContainSingle(node => node.DisplayName == OpcUaTestNodeManager.SecondCycleFolderName).Subject;
 
             cycleEnd.Children.Should().BeEmpty();
 
@@ -230,7 +230,7 @@ public sealed class OpcUaClient_BrowseAddressSpaceAsync
 
         var nodes = await client.BrowseAddressSpaceAsync(session, TestContext.Current.CancellationToken);
 
-        var second = nodes.Should().ContainSingle().Which.Children.Should().ContainSingle().Which;
+        var second = nodes.Should().ContainSingle().Which.Children.Should().ContainSingle().Subject;
 
         second.DisplayName.Should().Be("Second");
         second.Children.Should().BeEmpty();
