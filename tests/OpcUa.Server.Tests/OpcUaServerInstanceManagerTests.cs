@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
 using Xunit;
 
@@ -169,5 +170,39 @@ public class OpcUaServerInstanceManager_
         ((IDisposable)server2).DidNotReceiveWithAnyArgs().Dispose();
         ((IDisposable)server3).DidNotReceiveWithAnyArgs().Dispose();
         ((IDisposable)server4).DidNotReceiveWithAnyArgs().Dispose();
+    }
+}
+
+public class OpcUaServerInstanceManager_StopOpcUaServer
+{
+    [Fact]
+    public async Task Starts_the_server_after_more_stops_than_starts_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
+        await instanceManager.StopOpcUaServer(communication, TestContext.Current.CancellationToken);
+        await instanceManager.StopOpcUaServer(communication, TestContext.Current.CancellationToken);
+        await instanceManager.StopOpcUaServer(communication, TestContext.Current.CancellationToken);
+        await instanceManager.StartOpcUaServer(communication, TestContext.Current.CancellationToken);
+
+        await server.Received(1).StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Warns_about_a_stop_of_a_server_that_was_never_started_Async()
+    {
+        FakeLogger<IOpcUaServer> logger = new();
+        var server = Substitute.For<IOpcUaServer>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, new(), logger);
+        await instanceManager.StopOpcUaServer(communication, TestContext.Current.CancellationToken);
+
+        await server.DidNotReceiveWithAnyArgs().StopAsync(TestContext.Current.CancellationToken);
+        logger.LatestRecord.Message.Should().Match("*localhost:55555*was never started*");
     }
 }
