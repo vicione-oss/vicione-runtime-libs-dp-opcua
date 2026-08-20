@@ -143,10 +143,8 @@ internal sealed class DataPortNodeManager : NodeManager
         if (typeInfo == null || typeInfo == TypeInfo.Unknown)
             return StatusCodes.BadTypeMismatch;
 
-        var identifier = (string)node.NodeId.Identifier;
-
-        if (!_nodesConfiguration.TryGetValue(identifier, out var config))
-            throw new InvalidOperationException($"Failed to find configuration for {identifier}.");
+        if (node.NodeId.Identifier is not string identifier || !_nodesConfiguration.TryGetValue(identifier, out var config))
+            return ServiceResult.Create(StatusCodes.BadInternalError, "Failed to find configuration for {0}.", node.NodeId);
 
         if (!IsInRange(config.MinProperty, config.MaxProperty, value))
             return StatusCodes.BadOutOfRange;
