@@ -149,35 +149,51 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
             if (_session is null)
                 throw new InvalidOperationException("OPC UA client session is not initialized.");
 
-            _session.Browse(null, null, ObjectIds.ObjectsFolder, 0u, BrowseDirection.Forward, ReferenceTypeIds.HierarchicalReferences, true,
-                (uint)NodeClass.Variable | (uint)NodeClass.Object | (uint)NodeClass.Method, out _, out var references);
-
-            return [.. BrowseNodes(references)];
+            return await BrowseChildrenAsync(_session, ObjectIds.ObjectsFolder, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _sessionSemaphore.Release();
         }
+    }
 
-        IEnumerable<OpcUaNode> BrowseNodes(ReferenceDescriptionCollection references)
+    private static async Task<IReadOnlyCollection<OpcUaNode>> BrowseChildrenAsync(ISession session, NodeId nodeId, CancellationToken cancellationToken)
+    {
+        var references = await BrowseReferencesAsync(session, nodeId, cancellationToken).ConfigureAwait(false);
+
+        List<OpcUaNode> nodes = new(references.Count);
+
+        foreach (var reference in references)
         {
-            foreach (var reference in references)
+            var displayName = reference.DisplayName?.Text ?? string.Empty;
+            var childNodeId = OpcUaNode.ResolveNodeId(reference.NodeId, session.NamespaceUris, displayName);
+
+            nodes.Add(new()
             {
-                var displayName = reference.DisplayName?.Text ?? string.Empty;
-                var nodeId = OpcUaNode.ResolveNodeId(reference.NodeId, _session.NamespaceUris, displayName);
-
-                _session.Browse(null, null, nodeId, 0u,
-                    BrowseDirection.Forward, ReferenceTypeIds.HierarchicalReferences, true,
-                    (uint)NodeClass.Variable | (uint)NodeClass.Object | (uint)NodeClass.Method, out _, out var nextRefs);
-
-                yield return new()
-                {
-                    NodeId = nodeId,
-                    DisplayName = displayName,
-                    Children = [.. BrowseNodes(nextRefs)],
-                };
-            }
+                NodeId = childNodeId,
+                DisplayName = displayName,
+                Children = await BrowseChildrenAsync(session, childNodeId, cancellationToken).ConfigureAwait(false),
+            });
         }
+
+        return nodes;
+    }
+
+    /// <summary>
+    /// A server is free to answer a browse with only part of a node's references and a continuation point for the
+    /// rest, whatever maximum the request asks for, which is why a plain browse is not enough. A point left behind by
+    /// a cancelled browse is the server's to time out.
+    /// </summary>
+    private static async Task<ReferenceDescriptionCollection> BrowseReferencesAsync(ISession session, NodeId nodeId, CancellationToken cancellationToken)
+    {
+        var (references, errors) = await session.ManagedBrowseAsync(null, null, [nodeId,], 0u, BrowseDirection.Forward,
+            ReferenceTypeIds.HierarchicalReferences, true,
+            (uint)NodeClass.Variable | (uint)NodeClass.Object | (uint)NodeClass.Method, cancellationToken).ConfigureAwait(false);
+
+        if (ServiceResult.IsBad(errors[0]))
+            throw new InvalidOperationException($"Cannot browse OPC UA node '{nodeId}': {errors[0]}.");
+
+        return references[0];
     }
 
     public async Task SubscribeAsync(NodeId nodeId, Action<object?, DateTime> callback, CancellationToken cancellationToken)

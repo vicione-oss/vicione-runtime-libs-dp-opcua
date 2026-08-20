@@ -99,3 +99,35 @@ public sealed class OpcUaClient_OnKeepAlive(OpcUaTestSystem opcUa)
     // The captured log carries the SDK's output too: connecting installs the logger globally through Utils.SetLogger.
     private static IEnumerable<FakeLogRecord> KeepAliveFailures(FakeLogger logger) => logger.Collector.GetSnapshot().Where(record => record.Message.Contains("Keep alive action failed", StringComparison.Ordinal));
 }
+
+/// <summary>
+/// Covers the browse of a server's address space. What a real server hands back is shaped by limits the client does
+/// not control, so the tests here drive servers that page, cycle and nest.
+/// </summary>
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaClient_BrowseNodesAsync
+{
+    [Fact]
+    public async Task Returns_every_child_of_a_folder_the_server_answers_in_pages_Async()
+    {
+        await using var opcUa = await OpcUaTestSystem.StartAsync(options => options.OversizedFolder = true);
+        using OpcUaClient client = new(opcUa.Communication);
+
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+
+        try
+        {
+            var nodes = await client.BrowseNodesAsync(TestContext.Current.CancellationToken);
+
+            var folder = Flatten(nodes).Should().ContainSingle(node => node.DisplayName == OpcUaTestNodeManager.OversizedFolderName).Which;
+
+            folder.Children.Should().HaveCount(OpcUaTestNodeManager.OversizedFolderChildCount);
+        }
+        finally
+        {
+            await client.DisconnectAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    private static IEnumerable<OpcUaNode> Flatten(IEnumerable<OpcUaNode> nodes) => nodes.SelectMany(node => Flatten(node.Children).Prepend(node));
+}
