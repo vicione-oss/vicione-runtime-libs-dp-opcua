@@ -14,7 +14,7 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
     private readonly OpcUaClientDataPortCommunication _communication;
     private readonly ILogger<IOpcUaClient> _clientLogger;
     private readonly IOpcUaClientInstanceManager _instanceManager;
-    private readonly Dictionary<string, NodeId> _channelNodes = [];
+    private readonly Dictionary<string, (INode DataPortNode, NodeId NodeId)> _channelNodes = [];
     private IOpcUaClient? _client;
 
     public OpcUaClientDataPortOutgoing(OpcUaClientDataPortCommunication communication, ILoggerFactory loggerFactory) : this(communication, loggerFactory.CreateLogger<IOpcUaClient>(), OpcUaClientInstanceManager.Instance)
@@ -71,10 +71,10 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
 
         foreach (var value in values)
         {
-            if (!_channelNodes.TryGetValue(value.Channel, out var nodeId))
+            if (!_channelNodes.TryGetValue(value.Channel, out var channelNode))
                 throw new InvalidOperationException($"Channel '{value.Channel}' is not mapped to an OPC UA node.");
 
-            resolvedValues.Add((nodeId, value.Value));
+            resolvedValues.Add((channelNode.NodeId, value.Value));
         }
 
         return resolvedValues;
@@ -98,7 +98,7 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         }
     }
 
-    private static void CreateChannelNodes(IReadOnlyCollection<IReadOnlyCollection<INode>> routes, IReadOnlyCollection<OpcUaNode> opcNodes, Dictionary<string, NodeId> channelNodes)
+    private static void CreateChannelNodes(IReadOnlyCollection<IReadOnlyCollection<INode>> routes, IReadOnlyCollection<OpcUaNode> opcNodes, Dictionary<string, (INode DataPortNode, NodeId NodeId)> channelNodes)
     {
         var currentOpcNodes = opcNodes;
 
@@ -113,8 +113,12 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
                 }
 
                 var channel = GetAffectedChannel(dataPortNode);
+                var opcUaNode = GetOpcUaNode(dataPortNode);
 
-                channelNodes.Add(channel, GetOpcUaNode(dataPortNode).NodeId);
+                if (channelNodes.TryGetValue(channel, out var mappedNode))
+                    throw new InvalidOperationException($"Channel '{channel}' is affected by node '{mappedNode.DataPortNode.Name}' ({mappedNode.DataPortNode.Id}) and node '{dataPortNode.Name}' ({dataPortNode.Id}).");
+
+                channelNodes.Add(channel, (dataPortNode, opcUaNode.NodeId));
             }
 
             currentOpcNodes = opcNodes;

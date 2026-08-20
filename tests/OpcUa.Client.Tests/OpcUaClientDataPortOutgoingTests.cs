@@ -513,4 +513,56 @@ public class OpcUaClientDataPortOutgoing_
         await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
             .ThrowAsync<InvalidOperationException>().WithMessage("*'test'*more than one affected channel*'channel1', 'channel2'*");
     }
+
+    [Fact]
+    public async Task Fails_the_connect_when_two_nodes_affect_the_same_channel_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "first",
+                },
+                new()
+                {
+                    Id = Guid.Parse("cbf0f7d6-5e6a-4b62-9a19-1b2fbb0ac0e8"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "second",
+                },
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                DisplayName = "first",
+                NodeId = new("ns=2;s=first"),
+            },
+            new()
+            {
+                DisplayName = "second",
+                NodeId = new("ns=2;s=second"),
+            },
+        ]);
+
+        var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+
+        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
+            .ThrowAsync<InvalidOperationException>().WithMessage("*'channel'*'first'*'second'*");
+    }
 }
