@@ -36,6 +36,12 @@ internal sealed class OpcUaTestNodeManager : CustomNodeManager2
     /// <summary>How many references the server hands back per browse response while the oversized folder is on.</summary>
     internal const uint MaxReferencesPerBrowse = 10;
 
+    /// <summary>How far below the Objects folder <see cref="RootFolderName"/> sits.</summary>
+    internal const int RootFolderDepth = 1;
+
+    /// <summary>The name of the deep chain folder <paramref name="depth"/> levels below the Objects folder.</summary>
+    internal static string DeepChainFolderNameAt(int depth) => "DeepChain" + depth.ToString("D2", CultureInfo.InvariantCulture);
+
     internal const string FirstCycleFolderName = "FirstCycleFolder";
     internal const string SecondCycleFolderName = "SecondCycleFolder";
 
@@ -119,6 +125,18 @@ internal sealed class OpcUaTestNodeManager : CustomNodeManager2
                 {
                     var name = $"Child{i.ToString("D2", CultureInfo.InvariantCulture)}";
                     CreateVariable(folder, name, name);
+                }
+            }
+
+            if (_options.DeepFolderChainDepth > 0)
+            {
+                var parent = root;
+
+                // The root folder already occupies the first level below the Objects folder, so the chain starts below it.
+                for (var depth = RootFolderDepth + 1; depth <= _options.DeepFolderChainDepth; depth++)
+                {
+                    var name = DeepChainFolderNameAt(depth);
+                    parent = CreateFolder(parent, name, name);
                 }
             }
 

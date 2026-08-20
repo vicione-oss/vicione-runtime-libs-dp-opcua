@@ -33,6 +33,16 @@ public class YamlTests
     }
 
     [Fact]
+    public void MaxDepth_of_the_client_node_matches_the_browse_depth_limit()
+    {
+        var metadata = RulesDeserializer.Deserialize("OpcUaClient.yaml");
+
+        var clientNode = metadata.Root!.ChildNodes!.Single(child => child.Id == "OPCUA-Client");
+
+        clientNode.MaxDepth.Should().Be(OpcUaClient.MaxDepth);
+    }
+
+    [Fact]
     public void DesignIds_should_be_in_yaml()
     {
         var metadata = RulesDeserializer.Deserialize("OpcUaClient.yaml");

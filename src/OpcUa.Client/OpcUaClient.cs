@@ -17,6 +17,8 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
     private const int ReconnectInterval = 5_000;
     private const int SubscriptionMinLifetimeInterval = 15_000;
 
+    internal const int MaxDepth = 64;
+
     private readonly OpcUaClientDataPortProperties _properties = new(communication);
     private readonly ILogger<IOpcUaClient>? _logger = logger;
     private readonly SemaphoreSlim _sessionSemaphore = new(1, 1);
@@ -149,15 +151,16 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
             if (_session is null)
                 throw new InvalidOperationException("OPC UA client session is not initialized.");
 
-            List<(NodeId NodeId, string DisplayName)> currentPath = [(ObjectIds.ObjectsFolder, BrowseNames.ObjectsFolder),];
-
-            return await BrowseChildrenAsync(_session, currentPath, cancellationToken).ConfigureAwait(false);
+            return await BrowseAddressSpaceAsync(_session, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _sessionSemaphore.Release();
         }
     }
+
+    internal Task<IReadOnlyCollection<OpcUaNode>> BrowseAddressSpaceAsync(ISession session, CancellationToken cancellationToken)
+        => BrowseChildrenAsync(session, [(ObjectIds.ObjectsFolder, BrowseNames.ObjectsFolder),], cancellationToken);
 
     /// <summary>
     /// Browses the node <paramref name="currentPath"/> ends at. A node that is already on that path would be browsed
@@ -180,6 +183,11 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
                 _logger?.LogBrowseCycleSkipped(_properties.ApplicationName, displayName, FormatPath(currentPath));
                 continue;
             }
+
+            var childDepth = currentPath.Count;
+
+            if (childDepth > MaxDepth)
+                throw new InvalidOperationException($"OPC UA nodes more than {MaxDepth} levels below the Objects folder are not browsed. The node '{displayName}' below '{FormatPath(currentPath)}' is deeper than that.");
 
             currentPath.Add((nodeId, displayName));
 

@@ -36,6 +36,12 @@ public sealed class OpcUaTestSystemOptions
     public bool OversizedFolder { get; set; }
 
     /// <summary>
+    /// Adds a chain of nested folders whose deepest folder sits this many levels below the Objects folder. Off while
+    /// it is zero.
+    /// </summary>
+    public int DeepFolderChainDepth { get; set; }
+
+    /// <summary>
     /// Adds two folders that organise each other, so following hierarchical references forward walks in a circle. The
     /// specification does not require a hierarchy to be a tree, so a conforming server is free to serve one.
     /// </summary>
@@ -57,5 +63,5 @@ public sealed class OpcUaTestSystemOptions
     /// Whether any switch needs the test node manager. While this is false the server serves its stock address space,
     /// which is what the shared fixture wants.
     /// </summary>
-    internal bool HasTestAddressSpace => DuplicateDisplayNames || MismatchedBrowseName || OversizedFolder || CyclicReferences || AbsoluteReference || SwapNamespaceOrder;
+    internal bool HasTestAddressSpace => DuplicateDisplayNames || MismatchedBrowseName || OversizedFolder || DeepFolderChainDepth > 0 || CyclicReferences || AbsoluteReference || SwapNamespaceOrder;
 }

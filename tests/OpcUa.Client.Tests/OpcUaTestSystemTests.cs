@@ -71,6 +71,22 @@ public sealed class OpcUaTestSystem_
     }
 
     [Fact]
+    public async Task Serves_a_folder_chain_whose_deepest_folder_sits_at_the_requested_depth_Async()
+    {
+        const int RequestedDepth = 8;
+
+        await using var opcUa = await OpcUaTestSystem.StartAsync(options => options.DeepFolderChainDepth = RequestedDepth);
+        using var session = await ConnectAsync(opcUa);
+
+        var nodeId = RootFolderId(session);
+
+        for (var depth = OpcUaTestNodeManager.RootFolderDepth + 1; depth <= RequestedDepth; depth++)
+            nodeId = FindChild(session, nodeId, OpcUaTestNodeManager.DeepChainFolderNameAt(depth));
+
+        Browse(session, nodeId).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Serves_two_folders_that_reference_each_other_Async()
     {
         await using var opcUa = await OpcUaTestSystem.StartAsync(options => options.CyclicReferences = true);
