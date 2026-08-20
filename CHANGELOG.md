@@ -25,6 +25,7 @@
 - Fix OPC UA client data ports not connecting to a server that federates another server's address space
 - Fix OPC UA client reading only the first page of a folder's references while browsing, which made every node configured below a large folder fail to connect as if the server did not have it
 - Fix OPC UA client browsing an address space whose hierarchy contains a cycle until the recursion overflowed the stack, which killed the process and every other data port running in it
+- Fix OPC UA client outgoing data port reporting an unmapped channel as a `KeyNotFoundException` thrown inside the write, once part of the batch had already been submitted; the channel is now named and nothing is written
 
 ## 0.32.0 - 2026-05-11
 

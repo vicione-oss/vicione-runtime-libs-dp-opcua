@@ -60,13 +60,24 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         if (_client is null)
             throw new InvalidOperationException("OPC UA client is not initialized.");
 
-        await _client.WriteValuesAsync(ConvertValues(), cancellationToken).ConfigureAwait(false);
+        await _client.WriteValuesAsync(ResolveValues(values), cancellationToken).ConfigureAwait(false);
+    }
 
-        IEnumerable<(NodeId NodeId, object? Value)> ConvertValues()
+    // Resolving every channel first keeps an unmapped one from surfacing inside the write, once
+    // part of the batch has already been submitted.
+    private List<(NodeId NodeId, object? Value)> ResolveValues(IReadOnlyCollection<ExternalValue> values)
+    {
+        List<(NodeId NodeId, object? Value)> resolvedValues = new(values.Count);
+
+        foreach (var value in values)
         {
-            foreach (var value in values)
-                yield return (_channelNodes[value.Channel], value.Value);
+            if (!_channelNodes.TryGetValue(value.Channel, out var nodeId))
+                throw new InvalidOperationException($"Channel '{value.Channel}' is not mapped to an OPC UA node.");
+
+            resolvedValues.Add((nodeId, value.Value));
         }
+
+        return resolvedValues;
     }
 
     private async Task RollBackConnectAsync()

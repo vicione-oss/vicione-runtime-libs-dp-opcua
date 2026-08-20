@@ -399,4 +399,44 @@ public class OpcUaClientDataPortOutgoing_
 
         await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should().ThrowAsync<InvalidOperationException>();
     }
+
+    [Fact]
+    public async Task Fails_the_send_when_a_channel_is_not_mapped_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "test",
+                },
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
+            },
+        ]);
+
+        var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+        await opcUaDataport.ConnectAsync(cancellation.Token);
+
+        await opcUaDataport.Awaiting(x => x.SendAsync(0, [new() { Channel = "unmapped", Value = 2, },], cancellation.Token)).Should()
+            .ThrowAsync<InvalidOperationException>().WithMessage("*'unmapped'*not mapped*");
+
+        await opcUaClient.DidNotReceive().WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token);
+    }
 }
