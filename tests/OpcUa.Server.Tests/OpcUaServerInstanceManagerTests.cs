@@ -38,13 +38,14 @@ public class OpcUaServerInstanceManager_
         using CancellationTokenSource cancellation = new();
 
         OpcUaServerDataPortCommunication communication = new();
-        var server = instanceManager.GetOrRegisterOpcUaServer(communication, new(), _logger);
-        await instanceManager.StartOpcUaServer(communication, cancellation.Token);
+        var instanceHandle = new object();
+        var server = instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, _logger);
+        await instanceManager.StartOpcUaServer(communication, instanceHandle, cancellation.Token);
 
         server.Should().NotBeNull();
         await server.Received(1).StartAsync(cancellation.Token);
 
-        await instanceManager.StopOpcUaServer(communication, cancellation.Token);
+        await instanceManager.StopOpcUaServer(communication, instanceHandle, cancellation.Token);
         await server.Received(1).StopAsync(cancellation.Token);
     }
 
@@ -57,16 +58,18 @@ public class OpcUaServerInstanceManager_
         using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer>());
         using CancellationTokenSource cancellation = new();
 
-        var server1 = instanceManager.GetOrRegisterOpcUaServer(communication1, new(), _logger);
-        var server2 = instanceManager.GetOrRegisterOpcUaServer(communication2, new(), _logger);
-        await instanceManager.StartOpcUaServer(communication1, cancellation.Token);
-        await instanceManager.StartOpcUaServer(communication2, cancellation.Token);
+        var instanceHandle1 = new object();
+        var instanceHandle2 = new object();
+        var server1 = instanceManager.GetOrRegisterOpcUaServer(communication1, instanceHandle1, _logger);
+        var server2 = instanceManager.GetOrRegisterOpcUaServer(communication2, instanceHandle2, _logger);
+        await instanceManager.StartOpcUaServer(communication1, instanceHandle1, cancellation.Token);
+        await instanceManager.StartOpcUaServer(communication2, instanceHandle2, cancellation.Token);
 
         server1.Should().BeSameAs(server2);
         await server1.Received(1).StartAsync(cancellation.Token);
 
-        await instanceManager.StopOpcUaServer(communication1, cancellation.Token);
-        await instanceManager.StopOpcUaServer(communication1, cancellation.Token);
+        await instanceManager.StopOpcUaServer(communication1, instanceHandle1, cancellation.Token);
+        await instanceManager.StopOpcUaServer(communication1, instanceHandle2, cancellation.Token);
     }
 
     [Fact]
@@ -108,15 +111,15 @@ public class OpcUaServerInstanceManager_
 
         var server1 = instanceManager.GetOrRegisterOpcUaServer(communication1, instanceHandle, _logger);
         var server2 = instanceManager.GetOrRegisterOpcUaServer(communication2, instanceHandle, _logger);
-        await instanceManager.StartOpcUaServer(communication1, cancellation.Token);
-        await instanceManager.StartOpcUaServer(communication2, cancellation.Token);
+        await instanceManager.StartOpcUaServer(communication1, instanceHandle, cancellation.Token);
+        await instanceManager.StartOpcUaServer(communication2, instanceHandle, cancellation.Token);
 
         server1.Should().NotBeSameAs(server2);
         await server1.Received(1).StartAsync(cancellation.Token);
         await server2.Received(1).StartAsync(cancellation.Token);
 
-        await instanceManager.StopOpcUaServer(communication1, cancellation.Token);
-        await instanceManager.StopOpcUaServer(communication2, cancellation.Token);
+        await instanceManager.StopOpcUaServer(communication1, instanceHandle, cancellation.Token);
+        await instanceManager.StopOpcUaServer(communication2, instanceHandle, cancellation.Token);
     }
 
     [Fact]
@@ -173,6 +176,81 @@ public class OpcUaServerInstanceManager_
     }
 }
 
+public class OpcUaServerInstanceManager_StartOpcUaServer
+{
+    [Fact]
+    public async Task Fails_when_the_server_is_not_registered_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+
+        await instanceManager.Awaiting(manager => manager.StartOpcUaServer(communication, new(), TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*localhost:55555*no longer registered*");
+
+        await server.DidNotReceiveWithAnyArgs().StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Starts_the_server_again_after_a_failed_start_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        server.StartAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException(new InvalidOperationException("Server did not initialize correctly.")), _ => Task.CompletedTask);
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+
+        var instanceHandle = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        await instanceManager.Awaiting(manager => manager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+
+        await server.Received(2).StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Does_not_stop_a_server_whose_start_failed_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        server.StartAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException(new InvalidOperationException("Server did not initialize correctly.")));
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+        var instanceHandle = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        await instanceManager.Awaiting(manager => manager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await instanceManager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+
+        await server.DidNotReceiveWithAnyArgs().StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Keeps_the_server_running_when_a_data_port_whose_start_failed_is_stopped_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        server.StartAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException(new InvalidOperationException("Server did not initialize correctly.")), _ => Task.CompletedTask);
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+        var failedInstance = new object();
+        var startedInstance = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, failedInstance, new FakeLogger<IOpcUaServer>());
+        instanceManager.GetOrRegisterOpcUaServer(communication, startedInstance, new FakeLogger<IOpcUaServer>());
+        await instanceManager.Awaiting(manager => manager.StartOpcUaServer(communication, failedInstance, TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await instanceManager.StartOpcUaServer(communication, startedInstance, TestContext.Current.CancellationToken);
+        await instanceManager.StopOpcUaServer(communication, failedInstance, TestContext.Current.CancellationToken);
+
+        await server.DidNotReceiveWithAnyArgs().StopAsync(TestContext.Current.CancellationToken);
+    }
+}
+
 public class OpcUaServerInstanceManager_StopOpcUaServer
 {
     [Fact]
@@ -182,27 +260,89 @@ public class OpcUaServerInstanceManager_StopOpcUaServer
         using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
 
-        instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
-        await instanceManager.StopOpcUaServer(communication, TestContext.Current.CancellationToken);
-        await instanceManager.StopOpcUaServer(communication, TestContext.Current.CancellationToken);
-        await instanceManager.StopOpcUaServer(communication, TestContext.Current.CancellationToken);
-        await instanceManager.StartOpcUaServer(communication, TestContext.Current.CancellationToken);
+        var instanceHandle = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        await instanceManager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+        await instanceManager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+        await instanceManager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+        await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
 
         await server.Received(1).StartAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
-    public async Task Warns_about_a_stop_of_a_server_that_was_never_started_Async()
+    public async Task Does_not_start_a_server_again_whose_stop_failed_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        server.StopAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException(new InvalidOperationException("Shutdown failed.")));
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+        var instanceHandle = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+        await instanceManager.Awaiting(manager => manager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+
+        await server.Received(1).StartAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Stops_the_server_again_after_a_failed_stop_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        server.StopAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException(new InvalidOperationException("Shutdown failed.")), _ => Task.CompletedTask);
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+        var instanceHandle = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+        await instanceManager.Awaiting(manager => manager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await instanceManager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+
+        await server.Received(2).StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Logs_a_stop_of_a_server_that_is_not_running_Async()
     {
         FakeLogger<IOpcUaServer> logger = new();
         var server = Substitute.For<IOpcUaServer>();
         using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+        var instanceHandle = new object();
 
-        instanceManager.GetOrRegisterOpcUaServer(communication, new(), logger);
-        await instanceManager.StopOpcUaServer(communication, TestContext.Current.CancellationToken);
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, logger);
+        await instanceManager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
 
         await server.DidNotReceiveWithAnyArgs().StopAsync(TestContext.Current.CancellationToken);
-        logger.LatestRecord.Message.Should().Match("*localhost:55555*was never started*");
+        logger.LatestRecord.Level.Should().Be(LogLevel.Debug);
+        logger.LatestRecord.Message.Should().Match("*localhost:55555*is not running*");
+    }
+
+    [Fact]
+    public async Task Warns_when_a_data_port_that_did_not_start_the_server_stops_it_Async()
+    {
+        FakeLogger<IOpcUaServer> logger = new();
+        var server = Substitute.For<IOpcUaServer>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+        var startedInstance = new object();
+        var idleInstance = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, startedInstance, logger);
+        instanceManager.GetOrRegisterOpcUaServer(communication, idleInstance, logger);
+        await instanceManager.StartOpcUaServer(communication, startedInstance, TestContext.Current.CancellationToken);
+        await instanceManager.StopOpcUaServer(communication, idleInstance, TestContext.Current.CancellationToken);
+
+        await server.DidNotReceiveWithAnyArgs().StopAsync(TestContext.Current.CancellationToken);
+        logger.LatestRecord.Level.Should().Be(LogLevel.Warning);
+        logger.LatestRecord.Message.Should().Match("*localhost:55555*not one of those keeping it running*");
     }
 }

@@ -115,11 +115,11 @@ public class OpcUaServerDataPortOutgoing_
 
         var server = Substitute.For<IOpcUaServer, IDisposable>();
         using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
-        OpcUaServerDataPortOutgoing dataPort = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+        OpcUaServerDataPortOutgoing dataPortOutgoing = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
 
-        await dataPort.DisposeAsync();
+        await dataPortOutgoing.DisposeAsync();
 
-        await dataPort.Awaiting(port => port.ConnectAsync(TestContext.Current.CancellationToken))
+        await dataPortOutgoing.Awaiting(port => port.ConnectAsync(TestContext.Current.CancellationToken))
             .Should().ThrowAsync<InvalidOperationException>();
     }
 
@@ -177,8 +177,8 @@ public class OpcUaServerDataPortOutgoing_
         Received.InOrder(async () =>
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportOutgoing, logger);
-            await instanceManager.StartOpcUaServer(communication, cancellation.Token);
-            await instanceManager.StopOpcUaServer(communication, cancellation.Token);
+            await instanceManager.StartOpcUaServer(communication, dataportOutgoing, cancellation.Token);
+            await instanceManager.StopOpcUaServer(communication, dataportOutgoing, cancellation.Token);
             await instanceManager.ReleaseOpcUaServerAsync(communication, dataportOutgoing, Arg.Any<CancellationToken>());
         });
     }
@@ -230,7 +230,7 @@ public class OpcUaServerDataPortOutgoing_
         Received.InOrder(async () =>
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportOutgoing, logger);
-            await instanceManager.StartOpcUaServer(communication, cancellation.Token);
+            await instanceManager.StartOpcUaServer(communication, dataportOutgoing, cancellation.Token);
             await server.PublishValueAsync("readonly", "value", new DateTime(2023, 11, 20), null, cancellation.Token);
         });
     }

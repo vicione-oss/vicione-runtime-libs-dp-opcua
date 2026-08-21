@@ -39,13 +39,13 @@ public class OpcUaServerDataPortIncoming_
 
         var server = Substitute.For<IOpcUaServer, IDisposable>();
         using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
-        OpcUaServerDataPortIncoming dataPort = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+        OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
 
-        await dataPort.DisposeAsync();
+        await dataPortIncoming.DisposeAsync();
 
-        await dataPort.Awaiting(port => port.ConnectAsync(TestContext.Current.CancellationToken))
+        await dataPortIncoming.Awaiting(port => port.ConnectAsync(TestContext.Current.CancellationToken))
             .Should().ThrowAsync<InvalidOperationException>();
-        await dataPort.Awaiting(port => port.DisconnectAsync(TestContext.Current.CancellationToken))
+        await dataPortIncoming.Awaiting(port => port.DisconnectAsync(TestContext.Current.CancellationToken))
             .Should().NotThrowAsync();
     }
 
@@ -143,8 +143,8 @@ public class OpcUaServerDataPortIncoming_
         Received.InOrder(async () =>
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportIncoming, logger);
-            await instanceManager.StartOpcUaServer(communication, cancellation.Token);
-            await instanceManager.StopOpcUaServer(communication, cancellation.Token);
+            await instanceManager.StartOpcUaServer(communication, dataportIncoming, cancellation.Token);
+            await instanceManager.StopOpcUaServer(communication, dataportIncoming, cancellation.Token);
             await instanceManager.ReleaseOpcUaServerAsync(communication, dataportIncoming, default);
         });
     }

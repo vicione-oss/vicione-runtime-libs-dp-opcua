@@ -42,10 +42,10 @@ public sealed class OpcUaServerDataPortOutgoing : IExternalOutgoingCommunication
     }
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
-        => await _instanceManager.StartOpcUaServer(_communication, cancellationToken).ConfigureAwait(false);
+        => await _instanceManager.StartOpcUaServer(_communication, this, cancellationToken).ConfigureAwait(false);
 
     public async Task DisconnectAsync(CancellationToken cancellationToken)
-        => await _instanceManager.StopOpcUaServer(_communication, cancellationToken).ConfigureAwait(false);
+        => await _instanceManager.StopOpcUaServer(_communication, this, cancellationToken).ConfigureAwait(false);
 
     public async ValueTask DisposeAsync()
         => await _instanceManager.ReleaseOpcUaServerAsync(_communication, this, CancellationToken.None).ConfigureAwait(false);
