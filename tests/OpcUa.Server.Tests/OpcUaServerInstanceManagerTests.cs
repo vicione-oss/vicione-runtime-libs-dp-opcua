@@ -176,6 +176,45 @@ public class OpcUaServerInstanceManager_
     }
 }
 
+public class OpcUaServerInstanceManager_GetOrRegisterOpcUaServer
+{
+    [Fact]
+    public async Task Names_the_started_server_a_further_data_port_cannot_register_with_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+
+        var instanceHandle = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+
+        var register = () => instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
+
+        register.Should().Throw<InvalidOperationException>()
+            .WithMessage("*localhost:55555*already been started*disposed*");
+    }
+
+    [Fact]
+    public async Task Refuses_a_further_data_port_after_the_server_was_started_and_stopped_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+        var instanceHandle = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+        await instanceManager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
+
+        var register = () => instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
+
+        register.Should().Throw<InvalidOperationException>()
+            .WithMessage("*localhost:55555*already been started*disposed*");
+    }
+}
+
 public class OpcUaServerInstanceManager_StartOpcUaServer
 {
     [Fact]

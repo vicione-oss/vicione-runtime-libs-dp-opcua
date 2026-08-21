@@ -42,7 +42,7 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
     public void AddNodes(IReadOnlyCollection<Node> nodes)
     {
         if (_nodeManager is not null)
-            throw new InvalidOperationException("Node manager is already initialized.");
+            throw new InvalidOperationException("Cannot add nodes after the server has been started. The address space is built once, at start.");
 
         foreach (var node in nodes)
         {

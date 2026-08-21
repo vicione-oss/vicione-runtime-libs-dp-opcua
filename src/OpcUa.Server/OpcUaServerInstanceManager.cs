@@ -35,6 +35,9 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
         {
             if (_servers.TryGetValue(communication, out var entry))
             {
+                if (entry.HasStarted)
+                    throw new InvalidOperationException($"Cannot add nodes to the OPC UA server at '{communication.Server}:{communication.Port}' because it has already been started. Its address space is built once, when it starts; every data port using this server has to be disposed before another one can be added.");
+
                 entry.Server.AddNodes(communication.Nodes);
                 entry.Instances.Add(instance);
 
@@ -69,6 +72,7 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
             if (entry.StartedInstances.Count == 0)
                 await entry.Server.StartAsync(cancellationToken).ConfigureAwait(false);
 
+            entry.HasStarted = true;
             entry.StartedInstances.Add(instance);
         }
         finally
@@ -160,6 +164,7 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
     {
         public IOpcUaServer Server { get; init; } = server;
         public ILogger<IOpcUaServer> Logger { get; init; } = logger;
+        public bool HasStarted { get; set; }
         public HashSet<object> StartedInstances { get; init; } = [];
         public List<object> Instances { get; init; } = instances;
     }
