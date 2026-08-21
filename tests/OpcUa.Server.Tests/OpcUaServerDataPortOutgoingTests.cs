@@ -109,6 +109,21 @@ internal static class OutgoingServerSetup
 public class OpcUaServerDataPortOutgoing_
 {
     [Fact]
+    public async Task Fails_the_connect_after_the_server_was_released_Async()
+    {
+        var communication = OutgoingServerSetup.CreateCommunication();
+
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortOutgoing dataPort = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+
+        await dataPort.DisposeAsync();
+
+        await dataPort.Awaiting(port => port.ConnectAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
     public async Task DependencyInjectionProviderFactory_can_create_instance_Async()
     {
         await using var providerFactory = new ConstructorProviderFactory();

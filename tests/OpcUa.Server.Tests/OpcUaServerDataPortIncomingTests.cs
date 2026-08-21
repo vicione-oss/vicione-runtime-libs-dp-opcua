@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ViciOne.ManagedEngine.ExternalCommunication;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
 using ViciOne.ManagedEngine.Runtime;
 using Xunit;
@@ -29,6 +30,23 @@ public class OpcUaServerDataPortIncoming_
         if (configure is not null)
             configure(properties);
         return communication;
+    }
+
+    [Fact]
+    public async Task Fails_the_connect_after_the_server_was_released_Async()
+    {
+        var communication = CreateCommunication();
+
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortIncoming dataPort = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+
+        await dataPort.DisposeAsync();
+
+        await dataPort.Awaiting(port => port.ConnectAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await dataPort.Awaiting(port => port.DisconnectAsync(TestContext.Current.CancellationToken))
+            .Should().NotThrowAsync();
     }
 
     [Fact]
