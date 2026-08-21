@@ -16,6 +16,7 @@ public sealed class OpcUaServerDataPortIncoming : IExternalIncomingCommunication
     private readonly OpcUaServerDataPortCommunication _communication;
     private readonly EnvelopeChildren _envelopeChildren;
     private readonly IOpcUaServer _server;
+    private bool _subscribed;
 
     public event Action<IReadOnlyCollection<ExternalValue>>? Received;
 
@@ -39,12 +40,23 @@ public sealed class OpcUaServerDataPortIncoming : IExternalIncomingCommunication
     {
         await _instanceManager.StartOpcUaServer(_communication, this, cancellationToken).ConfigureAwait(false);
 
+        if (_subscribed)
+            return;
+
         _server.ReceiveValue += ReceiveValue;
+        _subscribed = true;
     }
 
     public async Task DisconnectAsync(CancellationToken cancellationToken)
     {
-        _server.ReceiveValue -= ReceiveValue;
+        // The server only carries subscribers once it has started, so unsubscribing after a failed
+        // connect throws and would keep the teardown from ever reaching the stop below.
+        if (_subscribed)
+        {
+            _server.ReceiveValue -= ReceiveValue;
+            _subscribed = false;
+        }
+
         await _instanceManager.StopOpcUaServer(_communication, this, cancellationToken).ConfigureAwait(false);
     }
 

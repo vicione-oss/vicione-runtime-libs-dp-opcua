@@ -67,6 +67,44 @@ public class OpcUaServerDataPortIncoming_
     }
 
     [Fact]
+    public async Task Stops_the_server_when_disconnecting_after_a_failed_connect_Async()
+    {
+        var communication = CreateCommunication();
+
+        var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
+        var server = Substitute.For<IOpcUaServer>();
+        var logger = Substitute.For<ILogger<IOpcUaServer>>();
+        server.When(s => s.ReceiveValue -= Arg.Any<Action<ReceivedWrite>>())
+            .Do(_ => throw new InvalidOperationException("Node manager is not initialized."));
+        instanceManager.GetOrRegisterOpcUaServer(Arg.Any<OpcUaServerDataPortCommunication>(), Arg.Any<object>(), Arg.Any<ILogger<IOpcUaServer>>()).Returns(server);
+        await using OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, logger);
+
+        await dataPortIncoming.DisconnectAsync(TestContext.Current.CancellationToken);
+
+        await instanceManager.Received(1).StopOpcUaServer(communication, dataPortIncoming, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Stops_receiving_values_after_a_disconnect_that_followed_two_connects_Async()
+    {
+        var communication = CreateCommunication();
+
+        var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
+        var server = Substitute.For<IOpcUaServer>();
+        instanceManager.GetOrRegisterOpcUaServer(Arg.Any<OpcUaServerDataPortCommunication>(), Arg.Any<object>(), Arg.Any<ILogger<IOpcUaServer>>()).Returns(server);
+        await using OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+        var deliveries = 0;
+        dataPortIncoming.Received += _ => deliveries++;
+
+        await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
+        await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
+        await dataPortIncoming.DisconnectAsync(TestContext.Current.CancellationToken);
+        server.ReceiveValue += Raise.Event<Action<ReceivedWrite>>(new ReceivedWrite("channel", "value", new DateTime(2026, 8, 21), Opc.Ua.StatusCodes.Good, new DateTime(2026, 8, 21)));
+
+        deliveries.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Registers_instance_correctly_Async()
     {
         var communication = CreateCommunication();
