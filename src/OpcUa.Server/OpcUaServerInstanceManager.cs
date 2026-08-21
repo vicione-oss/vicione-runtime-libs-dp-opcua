@@ -11,7 +11,12 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 {
     private readonly Dictionary<OpcUaServerDataPortCommunication, ServerInstance> _servers = new(new OpcUaServerDataPortCommunicationEqualityComparer());
     private readonly Func<OpcUaServerDataPortCommunication, ILogger<IOpcUaServer>, IOpcUaServer> _createServer;
+    // Never disposed: a stop or release that passed the disposed check before Dispose ran still
+    // waits on it, and finds nothing left to do once it gets in.
+#pragma warning disable CA2213 // Verwerfbare Felder verwerfen
     private readonly SemaphoreSlim _semaphore = new(1, 1);
+#pragma warning restore CA2213 // Verwerfbare Felder verwerfen
+    private bool _disposed;
 
     public static readonly OpcUaServerInstanceManager Instance = new();
 
@@ -28,6 +33,8 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
     public IOpcUaServer GetOrRegisterOpcUaServer(OpcUaServerDataPortCommunication communication, object instance, ILogger<IOpcUaServer> logger)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         _semaphore.Wait();
 
         try
@@ -58,6 +65,8 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
     public async Task StartOpcUaServer(OpcUaServerDataPortCommunication communication, object instance, CancellationToken cancellationToken)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -82,6 +91,9 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
     public async Task StopOpcUaServer(OpcUaServerDataPortCommunication communication, object instance, CancellationToken cancellationToken)
     {
+        if (_disposed)
+            return;
+
         await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -121,6 +133,9 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
     public async Task ReleaseOpcUaServerAsync(OpcUaServerDataPortCommunication communication, object instance, CancellationToken cancellationToken)
     {
+        if (_disposed)
+            return;
+
         await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -148,6 +163,10 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        _disposed = true;
         _semaphore.Wait();
 
         try
@@ -161,7 +180,6 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
         {
             _servers.Clear();
             _semaphore.Release();
-            _semaphore.Dispose();
         }
     }
 

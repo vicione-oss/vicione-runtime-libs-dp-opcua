@@ -258,10 +258,38 @@ public class OpcUaServerInstanceManager_Dispose
         logger.LatestRecord.Message.Should().Match("*localhost:55555*");
     }
 
+    [Fact]
+    public void Disposes_every_server_once_when_disposed_twice()
+    {
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
+        instanceManager.Dispose();
+        instanceManager.Dispose();
+
+        ((IDisposable)server).Received(1).Dispose();
+    }
 }
 
 public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
 {
+    [Fact]
+    public async Task Ignores_a_release_after_the_manager_was_disposed_Async()
+    {
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+        var instanceHandle = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        instanceManager.Dispose();
+        await instanceManager.ReleaseOpcUaServerAsync(communication, instanceHandle, TestContext.Current.CancellationToken);
+
+        ((IDisposable)server).Received(1).Dispose();
+    }
+
     [Fact]
     public async Task Stops_a_running_server_before_disposing_it_Async()
     {
@@ -358,6 +386,21 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
 
 public class OpcUaServerInstanceManager_GetOrRegisterOpcUaServer
 {
+    [Fact]
+    public void Refuses_a_data_port_after_the_manager_was_disposed()
+    {
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+
+        instanceManager.Dispose();
+
+        var register = () => instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
+
+        register.Should().Throw<ObjectDisposedException>()
+            .WithMessage("*OpcUaServerInstanceManager*");
+    }
+
     [Fact]
     public async Task Names_the_started_server_a_further_data_port_cannot_register_with_Async()
     {
