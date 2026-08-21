@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -126,16 +125,20 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
         try
         {
-            if (_servers.TryGetValue(communication, out var entry))
-            {
-                entry.Instances.Remove(instance);
+            if (!_servers.TryGetValue(communication, out var entry))
+                return;
 
-                if (entry.Instances.Count == 0)
-                {
-                    (entry.Server as IDisposable)?.Dispose();
-                    _servers.Remove(communication);
-                }
+            entry.Instances.Remove(instance);
+
+            if (entry.Instances.Count == 0)
+            {
+                await ShutDownAsync(communication, entry, cancellationToken).ConfigureAwait(false);
+                _servers.Remove(communication);
+                return;
             }
+
+            if (entry.StartedInstances.Remove(instance) && entry.StartedInstances.Count == 0)
+                await StopSafelyAsync(communication, entry, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -149,15 +152,57 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
         try
         {
-            foreach (var server in _servers.Values.Select(e => e.Server))
-                (server as IDisposable)?.Dispose();
+            foreach (var (communication, entry) in _servers)
+                // Task.Run keeps the shutdown off the caller's synchronization context, which
+                // would otherwise deadlock against the blocking wait.
+                Task.Run(() => ShutDownAsync(communication, entry, CancellationToken.None)).GetAwaiter().GetResult();
         }
         finally
         {
+            _servers.Clear();
             _semaphore.Release();
+            _semaphore.Dispose();
         }
+    }
 
-        _semaphore.Dispose();
+    /// <summary>
+    /// Stops and disposes the server without rethrowing what the server itself throws, so that
+    /// one server that refuses to shut down neither breaks the engine teardown nor keeps the
+    /// remaining servers running.
+    /// </summary>
+    private static async Task ShutDownAsync(OpcUaServerDataPortCommunication communication, ServerInstance entry, CancellationToken cancellationToken)
+    {
+        if (entry.StartedInstances.Count > 0)
+            await StopSafelyAsync(communication, entry, cancellationToken).ConfigureAwait(false);
+
+        entry.StartedInstances.Clear();
+        DisposeSafely(communication, entry);
+    }
+
+    private static async Task StopSafelyAsync(OpcUaServerDataPortCommunication communication, ServerInstance entry, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await entry.Server.StopAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Releasing runs from the data port's DisposeAsync, where a throw breaks the engine
+            // teardown for every port behind this one.
+            entry.Logger.LogServerShutdownFailed(communication.Server, communication.Port, exception);
+        }
+    }
+
+    private static void DisposeSafely(OpcUaServerDataPortCommunication communication, ServerInstance entry)
+    {
+        try
+        {
+            (entry.Server as IDisposable)?.Dispose();
+        }
+        catch (Exception exception)
+        {
+            entry.Logger.LogServerShutdownFailed(communication.Server, communication.Port, exception);
+        }
     }
 
     private class ServerInstance(IOpcUaServer server, ILogger<IOpcUaServer> logger, List<object> instances)

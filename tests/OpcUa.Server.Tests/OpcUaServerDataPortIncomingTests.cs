@@ -105,6 +105,25 @@ public class OpcUaServerDataPortIncoming_
     }
 
     [Fact]
+    public async Task Disposes_when_the_server_cannot_be_stopped_Async()
+    {
+        var communication = CreateCommunication();
+
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        server.StopAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException(new InvalidOperationException("Shutdown failed.")));
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        FakeLogger<IOpcUaServer> logger = new();
+        OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, logger);
+
+        await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
+        await dataPortIncoming.DisposeAsync();
+
+        ((IDisposable)server).Received(1).Dispose();
+        logger.LatestRecord.Message.Should().Match("*Cannot shut the OPC UA server*");
+    }
+
+    [Fact]
     public async Task Registers_instance_correctly_Async()
     {
         var communication = CreateCommunication();
