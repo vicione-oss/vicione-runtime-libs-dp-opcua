@@ -26,9 +26,6 @@ internal static partial class OpcUaServerDataPortLog
     [LoggerMessage(6, LogLevel.Warning, "Anonymous access used from session '{SessionId}'.")]
     internal static partial void LogAnonymousAccess(this ILogger logger, string sessionId);
 
-    [LoggerMessage(7, LogLevel.Warning, "Account locked after {FailCount} failed attempts for user '{User}'.")]
-    internal static partial void LogAccountLocked(this ILogger logger, int failCount, string user);
-
     [LoggerMessage(8, LogLevel.Warning,
         "OPC UA Server started with anonymous access enabled. " +
         "Consider setting UserAuthenticationType to 'Basic'.")]
