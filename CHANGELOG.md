@@ -30,6 +30,7 @@
 - Fix OPC UA client outgoing data port reporting two nodes that affect the same channel with a bare `ArgumentException`; the error now names the channel and both nodes
 - Fix OPC UA server turning every client write into an internal error when a data point's configured minimum or maximum was a different number type than the written value, such as a whole number limit on a float data point; the two are now compared as numbers
 - Fix OPC UA server letting an exception escape into the OPC UA stack when a client writes to a data point it holds no configuration for; the write is now refused with `BadInternalError`
+- Fix OPC UA server logging an account lockout on every failed login, which filled the security audit trail with lockouts that never happened
 
 ## 0.32.0 - 2026-05-11
 

@@ -13,11 +13,11 @@ using Opc.Ua.Server;
 
 namespace ViciOne.Suite.DataPort;
 
-internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication, ILogger<IOpcUaServer> logger) : StandardServer, IOpcUaServer
+internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication, ILogger<IOpcUaServer> logger, TimeProvider? timeProvider = null) : StandardServer, IOpcUaServer
 {
     private readonly OpcUaServerDataPortProperties _properties = new(communication);
     private readonly Dictionary<Guid, Node> _nodes = [];
-    private readonly LoginAttemptTracker _loginAttemptTracker = new();
+    private readonly LoginAttemptTracker _loginAttemptTracker = new(timeProvider);
     private DataPortNodeManager? _nodeManager;
 
     public event Action<string, DateTime, object> ReceiveValue
@@ -215,7 +215,11 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
         {
             _loginAttemptTracker.RecordFailure(username);
             logger.LogFailedAuthentication(username, sessionId);
-            logger.LogAccountLocked(username, _loginAttemptTracker.GetLockoutEnd(username));
+
+            var lockoutEnd = _loginAttemptTracker.GetLockoutEnd(username);
+
+            if (lockoutEnd is not null)
+                logger.LogAccountLocked(username, lockoutEnd);
 
             // construct translation object with default text.
             var info = new TranslationInfo(
