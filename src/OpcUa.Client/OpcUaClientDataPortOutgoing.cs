@@ -14,7 +14,7 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
     private readonly OpcUaClientDataPortCommunication _communication;
     private readonly ILogger<IOpcUaClient> _clientLogger;
     private readonly IOpcUaClientInstanceManager _instanceManager;
-    private readonly Dictionary<string, NodeId> _channelNodes = [];
+    private readonly Dictionary<string, (INode DataPortNode, NodeId NodeId)> _channelNodes = [];
     private IOpcUaClient? _client;
 
     public OpcUaClientDataPortOutgoing(OpcUaClientDataPortCommunication communication, ILoggerFactory loggerFactory) : this(communication, loggerFactory.CreateLogger<IOpcUaClient>(), OpcUaClientInstanceManager.Instance)
@@ -60,13 +60,24 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         if (_client is null)
             throw new InvalidOperationException("OPC UA client is not initialized.");
 
-        await _client.WriteValuesAsync(ConvertValues(), cancellationToken).ConfigureAwait(false);
+        await _client.WriteValuesAsync(ResolveValues(values), cancellationToken).ConfigureAwait(false);
+    }
 
-        IEnumerable<(NodeId NodeId, object? Value)> ConvertValues()
+    // Resolving every channel first keeps an unmapped one from surfacing inside the write, once
+    // part of the batch has already been submitted.
+    private List<(NodeId NodeId, object? Value)> ResolveValues(IReadOnlyCollection<ExternalValue> values)
+    {
+        List<(NodeId NodeId, object? Value)> resolvedValues = new(values.Count);
+
+        foreach (var value in values)
         {
-            foreach (var value in values)
-                yield return (_channelNodes[value.Channel], value.Value);
+            if (!_channelNodes.TryGetValue(value.Channel, out var channelNode))
+                throw new InvalidOperationException($"Channel '{value.Channel}' is not mapped to an OPC UA node.");
+
+            resolvedValues.Add((channelNode.NodeId, value.Value));
         }
+
+        return resolvedValues;
     }
 
     private async Task RollBackConnectAsync()
@@ -87,7 +98,7 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         }
     }
 
-    private static void CreateChannelNodes(IReadOnlyCollection<IReadOnlyCollection<INode>> routes, IReadOnlyCollection<OpcUaNode> opcNodes, Dictionary<string, NodeId> channelNodes)
+    private static void CreateChannelNodes(IReadOnlyCollection<IReadOnlyCollection<INode>> routes, IReadOnlyCollection<OpcUaNode> opcNodes, Dictionary<string, (INode DataPortNode, NodeId NodeId)> channelNodes)
     {
         var currentOpcNodes = opcNodes;
 
@@ -101,10 +112,13 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
                     continue;
                 }
 
-                var channel = dataPortNode.AffectedChannels.SingleOrDefault()
-                    ?? throw new InvalidOperationException($"Node '{dataPortNode.Name}' ({dataPortNode.Id}) has more than one affected channel.");
+                var channel = GetAffectedChannel(dataPortNode);
+                var opcUaNode = GetOpcUaNode(dataPortNode);
 
-                channelNodes.Add(channel, GetOpcUaNode(dataPortNode).NodeId);
+                if (channelNodes.TryGetValue(channel, out var mappedNode))
+                    throw new InvalidOperationException($"Channel '{channel}' is affected by node '{mappedNode.DataPortNode.Name}' ({mappedNode.DataPortNode.Id}) and node '{dataPortNode.Name}' ({dataPortNode.Id}).");
+
+                channelNodes.Add(channel, (dataPortNode, opcUaNode.NodeId));
             }
 
             currentOpcNodes = opcNodes;
@@ -113,5 +127,13 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         OpcUaNode GetOpcUaNode(INode dataPortNode)
             => currentOpcNodes.FirstOrDefault(n => n.DisplayName == dataPortNode.Name)
                 ?? throw new InvalidOperationException($"Cannot find node '{dataPortNode.Name}' ({dataPortNode.Id}) in OPC UA server.");
+
+        static string GetAffectedChannel(INode dataPortNode)
+            => dataPortNode.AffectedChannels.Count switch
+            {
+                1 => dataPortNode.AffectedChannels[0],
+                0 => throw new InvalidOperationException($"Node '{dataPortNode.Name}' ({dataPortNode.Id}) has no affected channel."),
+                _ => throw new InvalidOperationException($"Node '{dataPortNode.Name}' ({dataPortNode.Id}) has more than one affected channel: '{string.Join("', '", dataPortNode.AffectedChannels)}'.")
+            };
     }
 }

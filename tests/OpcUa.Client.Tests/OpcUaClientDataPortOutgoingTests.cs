@@ -359,12 +359,14 @@ public class OpcUaClientDataPortOutgoing_
                 new()
                 {
                     Id = Guid.Parse("99ecc27b-5a7c-4776-9528-4fd573118074"),
+                    DesignId = OpcUaClientNodeDesignId.Folder,
                     Name = "root",
                 },
                 new()
                 {
                     Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
-                    TransferredChannels =
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
                     [
                         "channel",
                     ],
@@ -397,6 +399,170 @@ public class OpcUaClientDataPortOutgoing_
         var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
 
-        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should().ThrowAsync<InvalidOperationException>();
+        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
+            .ThrowAsync<InvalidOperationException>().WithMessage("*Cannot find node 'test'*");
+    }
+
+    [Fact]
+    public async Task Fails_the_send_when_a_channel_is_not_mapped_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "test",
+                },
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
+            },
+        ]);
+
+        var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+        await opcUaDataport.ConnectAsync(cancellation.Token);
+
+        await opcUaDataport.Awaiting(x => x.SendAsync(0, [new() { Channel = "unmapped", Value = 2, },], cancellation.Token)).Should()
+            .ThrowAsync<InvalidOperationException>().WithMessage("*'unmapped'*not mapped*");
+
+        await opcUaClient.DidNotReceive().WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token);
+    }
+
+    [Fact]
+    public async Task Fails_the_connect_when_a_node_has_no_affected_channel_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    Name = "test",
+                },
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
+            },
+        ]);
+
+        var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+
+        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
+            .ThrowAsync<InvalidOperationException>().WithMessage("*'test'*has no affected channel*");
+    }
+
+    [Fact]
+    public async Task Fails_the_connect_when_a_node_has_more_than_one_affected_channel_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel1",
+                        "channel2",
+                    ],
+                    Name = "test",
+                },
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
+            },
+        ]);
+
+        var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+
+        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
+            .ThrowAsync<InvalidOperationException>().WithMessage("*'test'*more than one affected channel*'channel1', 'channel2'*");
+    }
+
+    [Fact]
+    public async Task Fails_the_connect_when_two_nodes_affect_the_same_channel_Async()
+    {
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "first",
+                },
+                new()
+                {
+                    Id = Guid.Parse("cbf0f7d6-5e6a-4b62-9a19-1b2fbb0ac0e8"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    AffectedChannels =
+                    [
+                        "channel",
+                    ],
+                    Name = "second",
+                },
+            ]);
+
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        var logger = Substitute.For<ILogger<IOpcUaClient>>();
+        using CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                DisplayName = "first",
+                NodeId = new("ns=2;s=first"),
+            },
+            new()
+            {
+                DisplayName = "second",
+                NodeId = new("ns=2;s=second"),
+            },
+        ]);
+
+        var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
+
+        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
+            .ThrowAsync<InvalidOperationException>().WithMessage("*'channel'*'first'*'second'*");
     }
 }
