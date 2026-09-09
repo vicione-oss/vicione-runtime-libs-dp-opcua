@@ -86,7 +86,7 @@ include:
   - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-test@2
     inputs:
       name: "dotnet Interoperability Test"
-      rules: *rules_manual
+      rules: *rules_not_tags
       before_script:
         - dotnet nuget update source JFrogNuGetProxy --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
       build_job_name: "dotnet Build+Test"
