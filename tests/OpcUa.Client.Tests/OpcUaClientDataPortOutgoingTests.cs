@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
 using ViciOne.ManagedEngine.ExternalCommunication;
 using ViciOne.ManagedEngine.Runtime;
@@ -13,9 +14,9 @@ using Xunit;
 
 namespace ViciOne.Suite.DataPort;
 
-public class OpcUaClientDataPortOutgoing_
+internal static class OutgoingClientSetup
 {
-    private static OpcUaClientDataPortCommunication CreateCommunication(IReadOnlyCollection<Node>? nodes = default, Action<OpcUaClientDataPortProperties>? configure = default)
+    internal static OpcUaClientDataPortCommunication CreateCommunication(IReadOnlyCollection<Node>? nodes = default, Action<OpcUaClientDataPortProperties>? configure = default)
     {
         OpcUaClientDataPortCommunication communication = new()
         {
@@ -37,6 +38,74 @@ public class OpcUaClientDataPortOutgoing_
         return communication;
     }
 
+    internal static OpcUaClientDataPortCommunication CreateCommunicationWithEnvelopeChildren()
+    {
+        var dataPointId = Guid.Parse("81c3bbad-6326-4122-b195-10aab9d75949");
+
+        return CreateCommunication(
+            [
+                new()
+                {
+                    Id = dataPointId,
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    Name = "test",
+                    ValueType = typeof(double),
+                    AffectedChannels = ["value"],
+                    TransferredChannels = ["value", "status", "sent"],
+                },
+                new()
+                {
+                    Id = Guid.Parse("2f4f9d5c-7c2b-4a52-9a8e-4f3d5a2b1c60"),
+                    ParentId = dataPointId,
+                    DesignId = OpcUaClientNodeDesignId.StatusCode,
+                    Name = "quality",
+                    ValueType = typeof(uint),
+                    AffectedChannels = ["status"],
+                },
+                new()
+                {
+                    Id = Guid.Parse("3a6b0e7d-8d3c-4b63-ab9f-50416b3c2d71"),
+                    ParentId = dataPointId,
+                    DesignId = OpcUaClientNodeDesignId.SourceTimestamp,
+                    Name = "when",
+                    ValueType = typeof(DateTime),
+                    AffectedChannels = ["sent"],
+                },
+            ]);
+    }
+
+    internal static (OpcUaClientDataPortOutgoing Port, List<OpcUaWrite> Written, CancellationTokenSource Cancellation) CreatePortWithEnvelopeChildren(ILogger<IOpcUaClient>? logger = null)
+    {
+        var communication = CreateCommunicationWithEnvelopeChildren();
+        var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
+        var opcUaClient = Substitute.For<IOpcUaClient>();
+        logger ??= Substitute.For<ILogger<IOpcUaClient>>();
+        CancellationTokenSource cancellation = new();
+        opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(
+        [
+            new()
+            {
+                DisplayName = "test",
+                NodeId = new("ns=2;s=test"),
+            },
+        ]);
+
+        List<OpcUaWrite> written = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<OpcUaWrite>>(), cancellation.Token))
+            .Do(c => written.AddRange((IEnumerable<OpcUaWrite>)c[0]));
+
+        var port = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
+        instanceManager.GetOrRegisterOpcUaClientAsync(communication, port, logger, cancellation.Token).Returns(opcUaClient);
+
+        return (port, written, cancellation);
+    }
+
+    internal static ExternalValue Value(string channel, object value)
+        => new() { Channel = channel, Timestamp = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc), Value = value, };
+}
+
+public class OpcUaClientDataPortOutgoing_
+{
     [Fact]
     public async Task DependencyInjectionProviderFactory_can_create_instance_Async()
     {
@@ -55,7 +124,7 @@ public class OpcUaClientDataPortOutgoing_
     [Fact]
     public async Task Connects_Async()
     {
-        var communication = CreateCommunication();
+        var communication = OutgoingClientSetup.CreateCommunication();
 
         var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
         var opcUaClient = Substitute.For<IOpcUaClient>();
@@ -72,7 +141,7 @@ public class OpcUaClientDataPortOutgoing_
     [Fact]
     public async Task Disconnects_Async()
     {
-        var communication = CreateCommunication();
+        var communication = OutgoingClientSetup.CreateCommunication();
 
         var instanceManager = Substitute.For<IOpcUaClientInstanceManager>();
         var opcUaClient = Substitute.For<IOpcUaClient>();
@@ -91,7 +160,7 @@ public class OpcUaClientDataPortOutgoing_
     [Fact]
     public async Task Sends_value_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -118,9 +187,9 @@ public class OpcUaClientDataPortOutgoing_
             },
         ]);
 
-        List<(Opc.Ua.NodeId NodeId, object? Value)> writtenValues = [];
-        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token))
-            .Do(c => writtenValues = [.. (IEnumerable<(Opc.Ua.NodeId, object?)>)c[0]!]);
+        List<OpcUaWrite> writtenValues = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<OpcUaWrite>>(), cancellation.Token))
+            .Do(c => writtenValues = [.. (IEnumerable<OpcUaWrite>)c[0]!]);
 
         var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
@@ -134,13 +203,13 @@ public class OpcUaClientDataPortOutgoing_
 
         await opcUaDataport.SendAsync(0, [value], cancellation.Token);
 
-        writtenValues.Should().BeEquivalentTo([(new Opc.Ua.NodeId("ns=2;s=test"), (object?)2),]);
+        writtenValues.Should().BeEquivalentTo([new OpcUaWrite(new Opc.Ua.NodeId("ns=2;s=test"), 2, Opc.Ua.StatusCodes.Good, DateTime.MinValue),]);
     }
 
     [Fact]
     public async Task Sends_child_node_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -182,9 +251,9 @@ public class OpcUaClientDataPortOutgoing_
             }
         ]);
 
-        List<(Opc.Ua.NodeId NodeId, object? Value)> writtenValues = [];
-        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token))
-            .Do(c => writtenValues = [.. (IEnumerable<(Opc.Ua.NodeId, object?)>)c[0]!]);
+        List<OpcUaWrite> writtenValues = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<OpcUaWrite>>(), cancellation.Token))
+            .Do(c => writtenValues = [.. (IEnumerable<OpcUaWrite>)c[0]!]);
 
         var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
@@ -198,13 +267,13 @@ public class OpcUaClientDataPortOutgoing_
 
         await opcUaDataport.SendAsync(0, [value], cancellation.Token);
 
-        writtenValues.Should().BeEquivalentTo([(new Opc.Ua.NodeId("ns=2;s=parent/test"), (object?)2),]);
+        writtenValues.Should().BeEquivalentTo([new OpcUaWrite(new Opc.Ua.NodeId("ns=2;s=parent/test"), 2, Opc.Ua.StatusCodes.Good, DateTime.MinValue),]);
     }
 
     [Fact]
     public async Task Sends_value_after_a_reconnect_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -231,9 +300,9 @@ public class OpcUaClientDataPortOutgoing_
             },
         ]);
 
-        List<(Opc.Ua.NodeId NodeId, object? Value)> writtenValues = [];
-        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token))
-            .Do(c => writtenValues = [.. (IEnumerable<(Opc.Ua.NodeId, object?)>)c[0]!]);
+        List<OpcUaWrite> writtenValues = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<OpcUaWrite>>(), cancellation.Token))
+            .Do(c => writtenValues = [.. (IEnumerable<OpcUaWrite>)c[0]!]);
 
         var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
@@ -244,13 +313,13 @@ public class OpcUaClientDataPortOutgoing_
 
         await opcUaDataport.SendAsync(0, [new() { Channel = "channel", Value = 2, },], cancellation.Token);
 
-        writtenValues.Should().BeEquivalentTo([(new Opc.Ua.NodeId("ns=2;s=test"), (object?)2),]);
+        writtenValues.Should().BeEquivalentTo([new OpcUaWrite(new Opc.Ua.NodeId("ns=2;s=test"), 2, Opc.Ua.StatusCodes.Good, DateTime.MinValue),]);
     }
 
     [Fact]
     public async Task Maps_all_channels_on_retry_after_a_failed_connect_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -294,9 +363,9 @@ public class OpcUaClientDataPortOutgoing_
         IReadOnlyCollection<OpcUaNode> completeNodes = [firstNode, secondNode,];
         opcUaClient.BrowseNodesAsync(cancellation.Token).Returns(incompleteNodes, completeNodes);
 
-        List<(Opc.Ua.NodeId NodeId, object? Value)> writtenValues = [];
-        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token))
-            .Do(c => writtenValues = [.. (IEnumerable<(Opc.Ua.NodeId, object?)>)c[0]!]);
+        List<OpcUaWrite> writtenValues = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<OpcUaWrite>>(), cancellation.Token))
+            .Do(c => writtenValues = [.. (IEnumerable<OpcUaWrite>)c[0]!]);
 
         var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
@@ -308,15 +377,15 @@ public class OpcUaClientDataPortOutgoing_
 
         writtenValues.Should().BeEquivalentTo(
         [
-            (new Opc.Ua.NodeId("ns=2;s=test1"), (object?)1),
-            (new Opc.Ua.NodeId("ns=2;s=test2"), (object?)2),
+            new OpcUaWrite(new Opc.Ua.NodeId("ns=2;s=test1"), 1, Opc.Ua.StatusCodes.Good, DateTime.MinValue),
+            new OpcUaWrite(new Opc.Ua.NodeId("ns=2;s=test2"), 2, Opc.Ua.StatusCodes.Good, DateTime.MinValue),
         ]);
     }
 
     [Fact]
     public async Task Releases_the_client_when_connecting_fails_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -354,7 +423,7 @@ public class OpcUaClientDataPortOutgoing_
     [Fact]
     public async Task Warns_if_UA_node_doesnt_exist_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -406,7 +475,7 @@ public class OpcUaClientDataPortOutgoing_
     [Fact]
     public async Task Fails_the_send_when_a_channel_is_not_mapped_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -440,13 +509,13 @@ public class OpcUaClientDataPortOutgoing_
         await opcUaDataport.Awaiting(x => x.SendAsync(0, [new() { Channel = "unmapped", Value = 2, },], cancellation.Token)).Should()
             .ThrowAsync<InvalidOperationException>().WithMessage("*'unmapped'*not mapped*");
 
-        await opcUaClient.DidNotReceive().WriteValuesAsync(Arg.Any<IEnumerable<(Opc.Ua.NodeId, object?)>>(), cancellation.Token);
+        await opcUaClient.DidNotReceive().WriteValuesAsync(Arg.Any<IEnumerable<OpcUaWrite>>(), cancellation.Token);
     }
 
     [Fact]
     public async Task Fails_the_connect_when_a_node_has_no_affected_channel_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -479,7 +548,7 @@ public class OpcUaClientDataPortOutgoing_
     [Fact]
     public async Task Fails_the_connect_when_a_node_has_more_than_one_affected_channel_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -517,7 +586,7 @@ public class OpcUaClientDataPortOutgoing_
     [Fact]
     public async Task Fails_the_connect_when_two_nodes_affect_the_same_channel_Async()
     {
-        var communication = CreateCommunication(
+        var communication = OutgoingClientSetup.CreateCommunication(
             [
                 new()
                 {
@@ -564,5 +633,159 @@ public class OpcUaClientDataPortOutgoing_
 
         await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
             .ThrowAsync<InvalidOperationException>().WithMessage("*'channel'*'first'*'second'*");
+    }
+}
+
+public class OpcUaClientDataPortOutgoing_ConnectAsync
+{
+    /// <summary>
+    /// The address space has no node of an envelope child, and a data point that carries two of them
+    /// ends two node routes - so mapping per route would report the data point as its own duplicate.
+    /// </summary>
+    [Fact]
+    public async Task Maps_a_data_point_with_envelope_children_once_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.Should().Match<OpcUaWrite>(write => write.NodeId.ToString() == "ns=2;s=test" && Equals(write.Value, 23.5));
+    }
+}
+
+public class OpcUaClientDataPortOutgoing_SendAsync
+{
+    /// <summary>
+    /// A status code has no write of its own; it replaces the status the value of its parent is
+    /// written with, which is good when nothing is linked.
+    /// </summary>
+    [Fact]
+    public async Task Writes_a_value_with_the_status_code_linked_to_its_envelope_child_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("status", "BadCommunicationError"), OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.Should().Be(new OpcUaWrite(new Opc.Ua.NodeId("ns=2;s=test"), 23.5, Opc.Ua.StatusCodes.BadCommunicationError, DateTime.MinValue));
+    }
+
+    [Fact]
+    public async Task Writes_a_value_as_good_when_no_status_code_is_linked_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.StatusCode.Should().Be(new Opc.Ua.StatusCode(Opc.Ua.StatusCodes.Good));
+    }
+
+    [Fact]
+    public async Task Writes_a_value_as_BadInternalError_when_its_status_code_cannot_be_read_Async()
+    {
+        FakeLogger<IOpcUaClient> logger = new();
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren(logger);
+        using var tokenSource = cancellation;
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("status", "0xZZ"), OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.StatusCode.Should().Be(new Opc.Ua.StatusCode(Opc.Ua.StatusCodes.BadInternalError));
+        logger.Collector.GetSnapshot().Should().ContainSingle(entry =>
+            entry.Level == LogLevel.Warning && entry.Message.Contains("'0xZZ'"));
+    }
+
+    /// <summary>
+    /// The engine sends a channel only in the cycle it changes in, so a status code that arrives
+    /// without its parent's value has to be written with the next value of that node.
+    /// </summary>
+    [Fact]
+    public async Task Writes_the_last_status_code_with_a_later_value_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("status", 0x80FF0000u),], cancellation.Token);
+        await port.SendAsync(1, [OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.Should().Be(new OpcUaWrite(new Opc.Ua.NodeId("ns=2;s=test"), 23.5, 0x80FF0000u, DateTime.MinValue));
+    }
+
+    [Fact]
+    public async Task Writes_nothing_for_a_status_code_that_arrives_without_a_value_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("status", "Uncertain"),], cancellation.Token);
+
+        written.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Writes_a_value_with_the_source_timestamp_linked_to_its_envelope_child_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+        var produced = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("sent", produced), OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.SourceTimestamp.Should().Be(produced);
+    }
+
+    /// <summary>
+    /// An unset source timestamp is what makes the receiving server stamp the value itself.
+    /// </summary>
+    [Fact]
+    public async Task Writes_no_source_timestamp_when_none_is_linked_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.SourceTimestamp.Should().Be(DateTime.MinValue);
+    }
+}
+
+public class OpcUaClientDataPortOutgoing_DisconnectAsync
+{
+    /// <summary>
+    /// A session goes and the node ids go with it, but what the engine last said about a value does
+    /// not. Forgetting it would write the next value as good on a data point whose last known status
+    /// was bad, and the engine sends a channel only in the cycle it changes in.
+    /// </summary>
+    [Fact]
+    public async Task Writes_the_status_code_it_was_told_before_a_reconnect_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("status", 0x80FF0000u),], cancellation.Token);
+        await port.DisconnectAsync(cancellation.Token);
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(1, [OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.StatusCode.Should().Be(new Opc.Ua.StatusCode(0x80FF0000u));
     }
 }

@@ -10,9 +10,12 @@ namespace ViciOne.Suite.DataPort;
 
 public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication<OpcUaClientDataPortCommunication>
 {
+    private static readonly EnvelopeChildKind[] s_servedKinds = [EnvelopeChildKind.StatusCode, EnvelopeChildKind.SourceTimestamp, EnvelopeChildKind.ServerTimestamp];
+
     private readonly OpcUaClientDataPortCommunication _communication;
     private readonly IOpcUaClientInstanceManager _instanceManager;
     private readonly ILogger<IOpcUaClient> _clientLogger;
+    private readonly EnvelopeChildren _envelopeChildren;
     private IOpcUaClient? _client;
 
     public event Action<IReadOnlyCollection<ExternalValue>>? Received;
@@ -25,6 +28,10 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
         _communication = communication;
         _instanceManager = instanceManager;
         _clientLogger = logger;
+
+        // Resolving the tree before the first connect keeps a configuration the port cannot serve
+        // from reaching a server at all.
+        _envelopeChildren = EnvelopeChildren.Create(communication.Nodes, s_servedKinds);
     }
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
@@ -82,20 +89,30 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
         // client, which is shared with the outgoing side and outlives the roll back.
         foreach (var (channel, opcUaNode) in ResolveChannelNodes(_communication.Nodes.GetRoutes(), browsedNodes))
         {
-            await _client.SubscribeAsync(opcUaNode.NodeId, (value, timestamp) =>
-                Received?.Invoke([new() {
-                    Channel = channel,
-                    Value = value,
-                    Timestamp = timestamp,
-                    Validity = 1,
-                }]), cancellationToken)
+            var children = _envelopeChildren.Of(channel);
+
+            await _client.SubscribeAsync(opcUaNode.NodeId, value => ReceiveValue(channel, children, value), cancellationToken)
                 .ConfigureAwait(false);
         }
     }
 
+    /// <summary>
+    /// Raises the value of the data point and the values of its envelope children as one batch. The
+    /// value is reported valid whatever status the server sent with it; that status reaches the
+    /// engine on the Status code child.
+    /// </summary>
+    private void ReceiveValue(string channel, IReadOnlyList<EnvelopeChild> children, OpcUaValue value)
+        => Received?.Invoke(EnvelopeBatch.Of(
+            new() { Channel = channel, Value = value.Value, Timestamp = value.Timestamp, Validity = 1, },
+            children,
+            value.StatusCode,
+            value.SourceTimestamp,
+            value.ServerTimestamp));
+
     private static List<(string Channel, OpcUaNode OpcUaNode)> ResolveChannelNodes(IReadOnlyCollection<IReadOnlyCollection<INode>> routes, IReadOnlyCollection<OpcUaNode> opcNodes)
     {
         List<(string Channel, OpcUaNode OpcUaNode)> channelNodes = [];
+        HashSet<Guid> resolved = [];
         var currentOpcNodes = opcNodes;
 
         foreach (var route in routes)
@@ -107,6 +124,12 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
                     currentOpcNodes = GetOpcUaNode(dataPortNode).Children;
                     continue;
                 }
+
+                // An envelope child addresses the value of its parent, so the server has no node of
+                // it to subscribe to. A data point that carries children also ends more than one
+                // route, and subscribing it once per route would double every value it receives.
+                if (EnvelopeChildren.IsEnvelopeChild(dataPortNode.DesignId) || !resolved.Add(dataPortNode.Id))
+                    continue;
 
                 var channel = GetAffectedChannel(dataPortNode);
 
