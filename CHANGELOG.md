@@ -16,6 +16,9 @@
 - Limit the OPC UA client browse to the `MaxDepth` of `64` levels declared for the DataPort node tree; a server nesting deeper now fails the data port connect with an error naming the node and the path down to it
 - Rename the company to `ViciOne open automation gmbh` in the package metadata, the license and the `Author` of the `.yaml` files
 - Require `ViciOne.Tree.Builder` `3.0.0` and cluster management `3.0.0`
+- **Breaking:** Replace the `Status` node property of the OPC UA server with the `Status code` envelope child of a data point; a configuration that linked the property has to link the child instead
+- **Breaking:** Implement `IExternalOutgoingCommunication` directly in `OpcUaServerDataPortOutgoing` instead of deriving from `DataPortOutgoingCommunicationWithPropertyHandling`; `SendAsync` takes the values of a cycle in one collection, and the overload with separate process and property values is gone
+- Serve an OPC UA variable with the status code and the source timestamp linked to the envelope children of its data point, a linked status code as it is even for a value that is not a number, and forward the ones a client writes on the same channels; writable data points now advertise `StatusWrite` and `TimestampWrite`
 
 ### Fixed
 

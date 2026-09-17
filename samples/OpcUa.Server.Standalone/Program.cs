@@ -8,6 +8,7 @@ using ViciOne.Suite.DataPort;
 var parentId = Guid.Parse("f57b4c50-1b4b-4513-a54a-e5274e7343e9");
 var childId = Guid.Parse("eb093bbe-b340-40ee-91cc-e552b73f0c01");
 var writeableChildId = Guid.Parse("6b4051bd-1c77-4191-b715-4a0abafd664e");
+var statusId = Guid.Parse("0a2f3f6f-6d1e-4a2a-9a8c-2b7cf1d1f3a5");
 
 OpcUaServerDataPortCommunication communication = new()
 {
@@ -25,14 +26,22 @@ OpcUaServerDataPortCommunication communication = new()
             Id = childId,
             Name = "child",
             ParentId = parentId,
-            TransferredChannels = ["child"],
+            TransferredChannels = ["child", "statusChannel"],
             AffectedChannels = ["child"],
             ValueType = typeof(int),
             Properties = new()
             {
-                { OpcUaServerDataPortPropertyNames.Status, new() { Value = "Good", Channels = ["statusChannel"] } },
                 { OpcUaServerDataPortPropertyNames.ReadOnly, new() { Value = true } },
             }
+        },
+        new()
+        {
+            DesignId = OpcUaServerNodeDesignId.StatusCode,
+            Id = statusId,
+            Name = "quality",
+            ParentId = childId,
+            AffectedChannels = ["statusChannel"],
+            ValueType = typeof(string),
         },
         new()
         {
@@ -94,8 +103,6 @@ await outgoing.SendAsync(cylce++,
             Timestamp = DateTime.Now,
             Value = 2,
         },
-    ],
-    [
         new()
         {
             Channel = "statusChannel",
@@ -134,9 +141,7 @@ _ = Task.Run(async () =>
                     Channel = "child",
                     Timestamp = DateTime.Now,
                     Value = DateTime.Now.Second,
-                }
-            ],
-            [
+                },
                 new()
                 {
                     Channel = "statusChannel",

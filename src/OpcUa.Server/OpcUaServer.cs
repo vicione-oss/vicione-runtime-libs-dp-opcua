@@ -20,7 +20,7 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
     private readonly LoginAttemptTracker _loginAttemptTracker = new(timeProvider);
     private DataPortNodeManager? _nodeManager;
 
-    public event Action<string, DateTime, object> ReceiveValue
+    public event Action<ReceivedWrite> ReceiveValue
     {
         add
         {
@@ -95,25 +95,25 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
         return Task.CompletedTask;
     }
 
-    public async Task PublishValueAsync(string channel, object? value, DateTime timestamp, CancellationToken cancellationToken)
+    public async Task PublishValueAsync(string channel, object? value, DateTime timestamp, StatusCode? statusCode, CancellationToken cancellationToken)
     {
         if (_nodeManager is null)
             throw new InvalidOperationException("Node manager is not initialized.");
 
         var node = _nodeManager.GetNodeState(channel);
 
-        if (!await _nodeManager.WriteVariableValueAsync(node, value, timestamp, false))
+        if (!await _nodeManager.WriteVariableValueAsync(node, value, timestamp, statusCode, false))
             throw new InvalidOperationException($"Failed to send '{value}' to node with id '{node.NodeId.Identifier}'.");
     }
 
-    public async Task SetNodeStatusAsync(string channel, object? value, CancellationToken cancellationToken)
+    public async Task SetNodeStatusAsync(string channel, StatusCode statusCode, CancellationToken cancellationToken)
     {
         if (_nodeManager is null)
             throw new InvalidOperationException("Node manager is not initialized.");
 
         var node = _nodeManager.GetNodeState(channel);
 
-        await _nodeManager.UpdateVariableStateAsync(node, OpcUaStatusCodes.ConvertToStatusCode(value, logger));
+        await _nodeManager.UpdateVariableStateAsync(node, statusCode);
     }
 
     protected override SessionManager CreateSessionManager(IServerInternal server, ApplicationConfiguration configuration)

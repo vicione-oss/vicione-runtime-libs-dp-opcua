@@ -128,8 +128,8 @@ public class DataPortNodeManager_OnWriteValue
     public void Publishes_the_written_value_to_every_mapped_channel()
     {
         using var manager = CreateNodeManager(typeof(double));
-        List<(string Channel, DateTime Timestamp, object Value)> received = [];
-        manager.ReceiveValue += (channel, timestamp, value) => received.Add((channel, timestamp, value));
+        List<(string Channel, DateTime Timestamp, object Value, StatusCode StatusCode)> received = [];
+        manager.ReceiveValue += write => received.Add((write.Channel, write.Timestamp, write.Value, write.StatusCode));
         var node = manager.GetNodeState(Channel);
 
         var result = Write(node, node, 3.4d);
@@ -210,6 +210,73 @@ public class DataPortNodeManager_OnWriteValue
         result.StatusCode.Code.Should().Be(StatusCodes.BadInternalError);
     }
 
+    [Fact]
+    public void Accepts_the_status_code_a_client_writes_with_the_value()
+    {
+        using var manager = CreateNodeManager(typeof(double));
+        List<(string Channel, object Value, StatusCode StatusCode)> received = [];
+        manager.ReceiveValue += write => received.Add((write.Channel, write.Value, write.StatusCode));
+
+        var result = WriteThroughStack(
+            manager.GetNodeState(Channel),
+            new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, SourceTimestamp = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc), });
+
+        StatusCode.IsGood(result.StatusCode).Should().BeTrue();
+        received.Should().Contain((Channel, 3.4d, new StatusCode(StatusCodes.BadCommunicationError)));
+    }
+
+    /// <summary>
+    /// A read-only data point grants no CurrentWrite, so the stack refuses the write before it
+    /// reaches the callback, and neither the value nor its status arrives.
+    /// </summary>
+    [Fact]
+    public void Refuses_a_write_to_a_read_only_data_point()
+    {
+        using var manager = CreateNodeManager(typeof(double), readOnly: true);
+        var received = 0;
+        manager.ReceiveValue += _ => received++;
+
+        var result = WriteThroughStack(manager.GetNodeState(Channel), new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, });
+
+        result.StatusCode.Should().Be(new StatusCode(StatusCodes.BadNotWritable));
+        received.Should().Be(0);
+    }
+
+    /// <summary>
+    /// A server sets the server timestamp of the values it serves, so the stack refuses a write that
+    /// carries one - and refuses the value with it. That is why no Server timestamp child is offered
+    /// on the server in either direction.
+    /// </summary>
+    [Fact]
+    public void Refuses_a_write_that_carries_a_server_timestamp()
+    {
+        using var manager = CreateNodeManager(typeof(double));
+        var received = 0;
+        manager.ReceiveValue += _ => received++;
+
+        var result = WriteThroughStack(manager.GetNodeState(Channel), new DataValue { Value = 3.4d, ServerTimestamp = new DateTime(2026, 3, 4, 5, 6, 8, DateTimeKind.Utc), });
+
+        result.StatusCode.Should().Be(new StatusCode(StatusCodes.BadWriteNotSupported));
+        received.Should().Be(0);
+    }
+
+    /// <summary>
+    /// The engine attributes the channel of an envelope child to its parent variable, so a client
+    /// write is raised on the channels of the variable alone.
+    /// </summary>
+    [Fact]
+    public void Raises_no_write_on_the_channel_of_an_envelope_child()
+    {
+        using var manager = CreateNodeManager(typeof(double), statusCodeChildChannel: SecondChannel);
+        List<string> channels = [];
+        manager.ReceiveValue += write => channels.Add(write.Channel);
+        var node = manager.GetNodeState(Channel);
+
+        Write(node, node, 3.4d);
+
+        channels.Should().Equal(Channel);
+    }
+
     private static ServiceResult Write(BaseDataVariableState variable, NodeState target, object value)
     {
         var timestamp = s_writeTimestamp;
@@ -218,11 +285,18 @@ public class DataPortNodeManager_OnWriteValue
 
     private static ServiceResult Write(BaseDataVariableState variable, NodeState target, object value, ref DateTime timestamp)
     {
-        SystemContext context = new() { NamespaceUris = new NamespaceTable(), TypeTable = CreateTypeTable() };
         StatusCode statusCode = StatusCodes.Good;
 
-        return variable.OnWriteValue(context, target, NumericRange.Empty, null, ref value, ref statusCode, ref timestamp);
+        return variable.OnWriteValue(CreateContext(), target, NumericRange.Empty, null, ref value, ref statusCode, ref timestamp);
     }
+
+    // The stack refuses a variable without CurrentWrite, and a value that carries a server
+    // timestamp, before the callback runs, so these writes go through the stack itself.
+    private static ServiceResult WriteThroughStack(BaseDataVariableState variable, DataValue value)
+        => variable.WriteAttribute(CreateContext(), Attributes.Value, NumericRange.Empty, value);
+
+    private static SystemContext CreateContext()
+        => new() { NamespaceUris = new NamespaceTable(), TypeTable = CreateTypeTable() };
 
     // The SDK asks the type tree whether the written value's data type is the node's data type, even
     // when the two are the same built-in type. Answering by identity is what a populated type tree
@@ -238,7 +312,7 @@ public class DataPortNodeManager_OnWriteValue
     private static BaseDataVariableState CreateVariable(NodeId nodeId)
         => new(null) { NodeId = nodeId, DataType = DataTypeIds.Double, ValueRank = ValueRanks.Scalar };
 
-    private static DataPortNodeManager CreateNodeManager(Type valueType, Property? minimum = null, Property? maximum = null, TimeProvider? timeProvider = null)
+    private static DataPortNodeManager CreateNodeManager(Type valueType, Property? minimum = null, Property? maximum = null, TimeProvider? timeProvider = null, bool readOnly = false, string? statusCodeChildChannel = null)
     {
         Node folder = new() { Id = Guid.NewGuid(), Name = "folder", DesignId = OpcUaServerNodeDesignId.Folder };
         Node variable = new()
@@ -249,28 +323,140 @@ public class DataPortNodeManager_OnWriteValue
             DesignId = OpcUaServerNodeDesignId.Variable,
             ValueType = valueType,
             TransferredChannels = [Channel, SecondChannel],
-            Properties = CreateLimits(minimum, maximum),
+            Properties = CreateProperties(minimum, maximum, readOnly),
+        };
+        List<INode> route = [folder, variable];
+
+        if (statusCodeChildChannel is not null)
+            route.Add(new Node { Id = Guid.NewGuid(), ParentId = variable.Id, Name = "quality", DesignId = OpcUaServerNodeDesignId.StatusCode, AffectedChannels = [statusCodeChildChannel] });
+
+        var server = Substitute.For<IServerInternal>();
+        server.NamespaceUris.Returns(new NamespaceTable());
+        server.DefaultSystemContext.Returns(_ => new ServerSystemContext(server));
+
+        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, [route], "urn:test", timeProvider);
+        manager.CreateAddressSpace(new Dictionary<NodeId, IList<IReference>>());
+
+        return manager;
+    }
+
+    private static Dictionary<string, Property> CreateProperties(Property? minimum, Property? maximum, bool readOnly)
+    {
+        Dictionary<string, Property> properties = [];
+
+        if (minimum is not null)
+            properties.Add(OpcUaServerDataPortPropertyNames.Minimum, minimum);
+        if (maximum is not null)
+            properties.Add(OpcUaServerDataPortPropertyNames.Maximum, maximum);
+        if (readOnly)
+            properties.Add(OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = true });
+
+        return properties;
+    }
+}
+
+public class DataPortNodeManager_CreateAddressSpace
+{
+    private const string ValueChannel = "value";
+    private const string ChildChannel = "child";
+
+    /// <summary>
+    /// An envelope child addresses the value of its parent variable, so it is neither a node a
+    /// client can browse to nor a channel the server publishes a value on. The engine attributes
+    /// its channel to the transferring parent, which is what makes the second half necessary.
+    /// </summary>
+    [Theory]
+    [InlineData(OpcUaServerNodeDesignId.StatusCode)]
+    [InlineData(OpcUaServerNodeDesignId.SourceTimestamp)]
+    [InlineData(EnvelopeNodeDesignId.ServerTimestamp)]
+    public void Serves_the_variable_but_not_its_envelope_child(string childDesignId)
+    {
+        using var manager = CreateNodeManager(childDesignId, [ChildChannel]);
+
+        var act = () => manager.GetNodeState(ChildChannel);
+
+        manager.GetNodeState(ValueChannel).BrowseName.Name.Should().Be("variable");
+        act.Should().Throw<InvalidOperationException>().WithMessage($"*{ChildChannel}*");
+    }
+
+    /// <summary>
+    /// Both ports register their tree with the server, so a child linked both ways arrives with one
+    /// channel per direction, and neither may be served as the value of its variable.
+    /// </summary>
+    [Fact]
+    public void Serves_neither_channel_of_a_child_linked_both_ways()
+    {
+        using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, ["status-out", "status-in"]);
+
+        var outbound = () => manager.GetNodeState("status-out");
+        var inbound = () => manager.GetNodeState("status-in");
+
+        outbound.Should().Throw<InvalidOperationException>();
+        inbound.Should().Throw<InvalidOperationException>();
+    }
+
+    /// <summary>
+    /// A client reads the access level to decide what it may write. The value of a writable data
+    /// point may carry a status and a source timestamp, so both are advertised.
+    /// </summary>
+    [Fact]
+    public void Advertises_that_a_status_and_a_source_timestamp_may_be_written()
+    {
+        using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel]);
+
+        var accessLevel = manager.GetNodeState(ValueChannel).AccessLevel;
+
+        (accessLevel & AccessLevels.StatusWrite).Should().NotBe(0);
+        (accessLevel & AccessLevels.TimestampWrite).Should().NotBe(0);
+    }
+
+    /// <summary>
+    /// A read-only data point advertises no write at all.
+    /// </summary>
+    [Fact]
+    public void Advertises_no_write_on_a_read_only_data_point()
+    {
+        using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel], readOnly: true);
+
+        var accessLevel = manager.GetNodeState(ValueChannel).AccessLevel;
+
+        (accessLevel & AccessLevels.CurrentWrite).Should().Be(0);
+        (accessLevel & AccessLevels.StatusWrite).Should().Be(0);
+        (accessLevel & AccessLevels.TimestampWrite).Should().Be(0);
+    }
+
+    private static DataPortNodeManager CreateNodeManager(string childDesignId, List<string> childChannels, bool readOnly = false)
+    {
+        Node folder = new() { Id = Guid.NewGuid(), Name = "folder", DesignId = OpcUaServerNodeDesignId.Folder };
+        Node variable = new()
+        {
+            Id = Guid.NewGuid(),
+            ParentId = folder.Id,
+            Name = "variable",
+            DesignId = OpcUaServerNodeDesignId.Variable,
+            ValueType = typeof(double),
+            AffectedChannels = [ValueChannel],
+            TransferredChannels = [ValueChannel, .. childChannels],
+            Properties = readOnly
+                ? new() { { OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = true } } }
+                : [],
+        };
+        Node child = new()
+        {
+            Id = Guid.NewGuid(),
+            ParentId = variable.Id,
+            Name = "child",
+            DesignId = childDesignId,
+            AffectedChannels = childChannels,
         };
 
         var server = Substitute.For<IServerInternal>();
         server.NamespaceUris.Returns(new NamespaceTable());
         server.DefaultSystemContext.Returns(_ => new ServerSystemContext(server));
 
-        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, [[folder, variable]], "urn:test", timeProvider);
+        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, [[folder, variable, child]], "urn:test");
         manager.CreateAddressSpace(new Dictionary<NodeId, IList<IReference>>());
 
         return manager;
-    }
-
-    private static Dictionary<string, Property> CreateLimits(Property? minimum, Property? maximum)
-    {
-        Dictionary<string, Property> limits = [];
-
-        if (minimum is not null)
-            limits.Add(OpcUaServerDataPortPropertyNames.Minimum, minimum);
-        if (maximum is not null)
-            limits.Add(OpcUaServerDataPortPropertyNames.Maximum, maximum);
-
-        return limits;
     }
 }
