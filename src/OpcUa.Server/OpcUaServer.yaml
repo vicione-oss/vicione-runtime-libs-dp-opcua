@@ -1,8 +1,8 @@
 Common:
   Target       : DataPort                                                                          # required: Id String to identify the target of the file
   ContentType  : Rules                                                                             # required: Id String to identify the content of the file
-  Version      : 0.32.0                                                                            # required: Version of the file
-  Date         : 2026-05-11                                                                        # required: Date of the file
+  Version      : 0.33.0                                                                            # required: Version of the file
+  Date         : 2026-09-23                                                                        # required: Date of the file
   Description  : "OPC-UA Server DataPort"                                                          # required: Description of the file
   Author       : "ViciOne open automation gmbh"                                                    # required: Author of the file
   MetadataType : YAML                                                                              # required: Metadata type of the file (YAML, JSON, XML, Text, Binary, ...)
@@ -112,6 +112,11 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
     PropertyCategories     :
       - Id                 : Other
         Properties         :
@@ -129,6 +134,11 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
     PropertyCategories     :
       - Id                 : Other
         Properties         :
@@ -146,6 +156,11 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
     PropertyCategories     :
       - Id                 : Other
         Properties         :
@@ -163,6 +178,11 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
     PropertyCategories     :
       - Id                 : Other
         Properties         :
@@ -180,6 +200,11 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
     PropertyCategories     :
       - Id                 : Other
         Properties         :
@@ -197,10 +222,39 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
     PropertyCategories     :
       - Id                 : Other
         Properties         :
           - Id             : ReadOnly
+
+  # -------------------- Envelope children -------------------------------
+
+  - Id                     : StatusCode
+    MappingId              : StatusCode
+    Type                   : DataPortTreeNode
+    Name                   : "Status code"
+    Description            : "Carries the OPC UA status code of the parent variable. Outbound it sets the status the variable is served with, written either as the number of the code or as its name, such as 'BadNotFound' or '0x803E0000'. Inbound it forwards the status code a client wrote the value with. It has no node of its own in the address space and no transfer of its own; it addresses the status of the parent variable."
+    Icon                   : datapoint
+    TransferModes          : [ None ]
+    TransferDirections     : [ Outbound, Inbound ]
+    LinkDirections         : [ Outbound, Inbound ]
+    DataTypes              : [ UInt32, String ]
+
+  - Id                     : SourceTimestamp
+    MappingId              : SourceTimestamp
+    Type                   : DataPortTreeNode
+    Name                   : "Source timestamp"
+    Description            : "Carries the OPC UA source timestamp of the parent variable, which is the point in time its value was produced. Outbound it sets that timestamp, which otherwise follows the timestamp of the value itself. Inbound it forwards the source timestamp a client wrote the value with, and carries nothing for a write that sent none. It has no node of its own in the address space and no transfer of its own; it addresses the source timestamp of the parent variable."
+    Icon                   : datapoint
+    TransferModes          : [ None ]
+    TransferDirections     : [ Outbound, Inbound ]
+    LinkDirections         : [ Outbound, Inbound ]
+    DataTypes              : [ DateTime ]
 
 PropertyCategories:
   - Id          : Connection

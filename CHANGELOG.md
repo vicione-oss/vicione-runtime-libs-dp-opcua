@@ -6,15 +6,16 @@
 
 - Add configurable `SubscriptionPublishingInterval` properties to OPC UA Client
 - Add configurable `MinPublishingInterval` and `MaxPublishingInterval` properties to OPC UA Server
+- Support envelope children on OPC UA data points: a `Status code`, a `Source timestamp` and, on the client, a `Server timestamp` child, each addressing one field of the OPC UA value of their parent instead of a node of their own
 
 ### Changed
 
 - Add new icons to DataPorts
-- Update `.yaml` files format to `2.0.0` (`ViciOne.TreeBuilder`)
+- Update `.yaml` files format to `2.0.0` (`ViciOne.Tree.Builder`)
 - Unify namespaces in DataPort yamls
 - Limit the OPC UA client browse to the `MaxDepth` of `64` levels declared for the DataPort node tree; a server nesting deeper now fails the data port connect with an error naming the node and the path down to it
 - Rename the company to `ViciOne open automation gmbh` in the package metadata, the license and the `Author` of the `.yaml` files
-- Update `ViciOne.TreeBuilder` to `2.1.0`
+- Require `ViciOne.Tree.Builder` `3.0.0` and cluster management `3.0.0`
 
 ### Fixed
 

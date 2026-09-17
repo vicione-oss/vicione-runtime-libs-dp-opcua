@@ -5,12 +5,6 @@ namespace ViciOne.Suite.DataPort;
 
 internal static partial class OpcUaServerDataPortLog
 {
-    [LoggerMessage(0, LogLevel.Warning, "Did not find a matching OPC status code for value '{Status}', sending BadInternalError. Please do not include a hyphen after 'Good', 'Bad' etc. Also, all status codes can be parsed completely unhyphenated i.e. 'BadEdited_OutOfRange' can also be 'BadEditedOutOfRange'.")]
-    internal static partial void LogNoSuchStatus(this ILogger logger, string status);
-
-    [LoggerMessage(1, LogLevel.Warning, "Unable to parse status code '{Status}', sending BadInternalError. Please send the status code as uint i.e. 0x803E0000 is 'BadNotFound' or as a string without a hyphen after 'Good', 'Bad', etc. i.e. 'BadNotFound' or 'BadInternalError'. A list of status codes can be found here: https://reference.opcfoundation.org/Core/Part6/v104/docs/A.2")]
-    internal static partial void LogParsingStatusFailed(this ILogger logger, object? status);
-
     [LoggerMessage(2, LogLevel.Error, "Cannot send values to '{Server}:{Port}'.")]
     internal static partial void LogSendFailure(this ILogger logger, string server, int port, Exception exception);
 

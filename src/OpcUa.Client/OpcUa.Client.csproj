@@ -20,4 +20,8 @@
     <Compile Include="..\OpcUa.Server\UserAuthenticationType.cs" Link="UserAuthenticationType.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\OpcUa.Shared\**\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+
 </Project>

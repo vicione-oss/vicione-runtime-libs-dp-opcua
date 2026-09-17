@@ -1,8 +1,8 @@
 Common:
   Target       : DataPort                                                                          # required: Id String to identify the target of the file
   ContentType  : Rules                                                                             # required: Id String to identify the content of the file
-  Version      : 0.32.0                                                                            # required: Version of the file
-  Date         : 2026-05-11                                                                        # required: Date of the file
+  Version      : 0.33.0                                                                            # required: Version of the file
+  Date         : 2026-09-23                                                                        # required: Date of the file
   Description  : "OPC-UA Client DataPort"                                                          # required: Description of the file
   Author       : "ViciOne open automation gmbh"                                                    # required: Author of the file
   MetadataType : YAML                                                                              # required: Metadata type of the file (YAML, JSON, XML, Text, Binary, ...)
@@ -106,6 +106,13 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
+      - Id                 : ServerTimestamp
+        MaxInstances       : 1
 
   - Id                     : DataPointInteger
     MappingId              : Variable
@@ -119,6 +126,13 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
+      - Id                 : ServerTimestamp
+        MaxInstances       : 1
 
   - Id                     : DataPointFloat
     MappingId              : Variable
@@ -132,6 +146,13 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
+      - Id                 : ServerTimestamp
+        MaxInstances       : 1
 
   - Id                     : DataPointDateTime
     MappingId              : Variable
@@ -145,6 +166,13 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
+      - Id                 : ServerTimestamp
+        MaxInstances       : 1
 
   - Id                     : DataPointString
     MappingId              : Variable
@@ -158,6 +186,13 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
+      - Id                 : ServerTimestamp
+        MaxInstances       : 1
 
   - Id                     : DataPointBinary
     MappingId              : Variable
@@ -171,6 +206,48 @@ Nodes:
       - Type               : Regex
         Pattern            : '^[^\x00-\x1f\x7f]{1,256}$'
         Message            : "DataPoint name cannot contain control characters and can not be longer than 256 characters or shorter than 1 character."
+    ChildNodes             :
+      - Id                 : StatusCode
+        MaxInstances       : 1
+      - Id                 : SourceTimestamp
+        MaxInstances       : 1
+      - Id                 : ServerTimestamp
+        MaxInstances       : 1
+
+  # -------------------- Envelope children -------------------------------
+
+  - Id                     : StatusCode
+    MappingId              : StatusCode
+    Type                   : DataPortTreeNode
+    Name                   : "Status code"
+    Description            : "Carries the OPC UA status code of the parent value. Inbound it forwards the status the server sent with the value. Outbound it overwrites the status the value is written with, which is 'Good' when nothing is linked; a server that does not accept a written status refuses the write and the value does not arrive. It has no node of its own on the server and no transfer of its own; it addresses the status of the parent value."
+    Icon                   : datapoint
+    TransferModes          : [ None ]
+    TransferDirections     : [ Outbound, Inbound ]
+    LinkDirections         : [ Outbound, Inbound ]
+    DataTypes              : [ UInt32, String ]
+
+  - Id                     : SourceTimestamp
+    MappingId              : SourceTimestamp
+    Type                   : DataPortTreeNode
+    Name                   : "Source timestamp"
+    Description            : "Carries the OPC UA source timestamp of the parent value, which is the point in time it was produced. Inbound it forwards the source timestamp the server sent, and carries nothing when the server sent none. Outbound it writes that timestamp with the value, which the receiving server otherwise sets itself; a server that does not accept a written timestamp refuses the write and the value does not arrive. It has no node of its own on the server and no transfer of its own; it addresses the source timestamp of the parent value."
+    Icon                   : datapoint
+    TransferModes          : [ None ]
+    TransferDirections     : [ Outbound, Inbound ]
+    LinkDirections         : [ Outbound, Inbound ]
+    DataTypes              : [ DateTime ]
+
+  - Id                     : ServerTimestamp
+    MappingId              : ServerTimestamp
+    Type                   : DataPortTreeNode
+    Name                   : "Server timestamp"
+    Description            : "Forwards the OPC UA server timestamp the server sent with the parent value, which is the point in time that server processed it, and carries nothing when the server sent none. It cannot be linked outbound: a server sets its own server timestamp and refuses one a client writes. It has no node of its own on the server and no transfer of its own; it addresses the server timestamp of the parent value."
+    Icon                   : datapoint
+    TransferModes          : [ None ]
+    TransferDirections     : [ Inbound ]
+    LinkDirections         : [ Inbound ]
+    DataTypes              : [ DateTime ]
 
 PropertyCategories:
   - Id          : Connection
