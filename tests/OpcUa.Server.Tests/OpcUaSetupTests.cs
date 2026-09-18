@@ -82,6 +82,63 @@ public class OpcUaSetup_CreateConfiguration_SecurityPolicies
     }
 }
 
+public class OpcUaSetup_CreateConfiguration_UserAuthentication
+{
+    [Theory]
+    [InlineData(null, "secret")]
+    [InlineData("", "secret")]
+    [InlineData("admin", null)]
+    [InlineData("admin", "")]
+    public void Basic_without_a_user_and_a_password_throws_InvalidOperationException(string? user, string? password)
+    {
+        OpcUaServerDataPortCommunication communication = new()
+        {
+            UserAuthenticationType = 1,
+            User = user,
+            Password = password,
+        };
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        Action act = () => OpcUaSetup.CreateConfiguration(properties);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Basic user authentication requires a user and a password.");
+    }
+
+    [Fact]
+    public void Basic_with_credentials_offers_a_user_name_token_policy()
+    {
+        OpcUaServerDataPortCommunication communication = new()
+        {
+            UserAuthenticationType = 1,
+            User = "admin",
+            Password = "secret",
+        };
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        var configuration = OpcUaSetup.CreateConfiguration(properties);
+
+        configuration.ServerConfiguration.UserTokenPolicies.Should().ContainSingle()
+            .Which.TokenType.Should().Be(UserTokenType.UserName);
+    }
+
+    /// <summary>
+    /// Anonymous access stays available to a configuration that asks for it; what changes is that
+    /// nobody gets it without asking.
+    /// </summary>
+    [Fact]
+    public void Anonymous_without_credentials_offers_an_anonymous_token_policy()
+    {
+        OpcUaServerDataPortCommunication communication = new() { UserAuthenticationType = 0, };
+        OpcUaServerDataPortProperties properties = new(communication);
+
+        var configuration = OpcUaSetup.CreateConfiguration(properties);
+
+        configuration.ServerConfiguration.UserTokenPolicies.Should().ContainSingle()
+            .Which.TokenType.Should().Be(UserTokenType.Anonymous);
+    }
+}
+
 public class OpcUaSetup_CreateConfiguration_TrustedPeerCertificates
 {
     [Fact]

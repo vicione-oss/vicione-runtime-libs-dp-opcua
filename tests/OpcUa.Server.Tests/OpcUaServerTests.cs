@@ -1,7 +1,51 @@
 using AwesomeAssertions;
+using Microsoft.Extensions.Logging.Testing;
+using Opc.Ua;
 using Xunit;
 
 namespace ViciOne.Suite.DataPort;
+
+public class OpcUaServer_HandleAnonymousAccess
+{
+    /// <summary>
+    /// The token policy the server advertises asks a client for a user name, but a client is free
+    /// to present an anonymous token anyway. Accepting it would hand every caller a session on a
+    /// server configured to authenticate its users.
+    /// </summary>
+    [Fact]
+    public void Rejects_the_session_when_the_server_authenticates_users()
+    {
+        using var server = CreateServer(userAuthenticationType: 1);
+
+        var act = () => server.HandleAnonymousAccess("session-1");
+
+        act.Should().Throw<ServiceResultException>()
+            .Which.StatusCode.Should().Be(StatusCodes.BadIdentityTokenRejected);
+    }
+
+    [Fact]
+    public void Grants_the_anonymous_role_when_the_server_allows_anonymous_access()
+    {
+        using var server = CreateServer(userAuthenticationType: 0);
+
+        var identity = server.HandleAnonymousAccess("session-1");
+
+        identity.TokenType.Should().Be(UserTokenType.Anonymous);
+    }
+
+    private static OpcUaServer CreateServer(byte userAuthenticationType)
+    {
+        OpcUaServerDataPortCommunication communication = new()
+        {
+            UserAuthenticationType = userAuthenticationType,
+            User = "admin",
+            Password = "secret",
+            Nodes = [],
+        };
+
+        return new(communication, new FakeLogger<IOpcUaServer>());
+    }
+}
 
 public class OpcUaServer_AreCredentialsValid
 {
