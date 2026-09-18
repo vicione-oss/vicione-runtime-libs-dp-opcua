@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ViciOne.ManagedEngine.ExternalCommunication;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
 using ViciOne.ManagedEngine.Runtime;
 using Xunit;
@@ -29,6 +30,65 @@ public class OpcUaServerDataPortIncoming_
         if (configure is not null)
             configure(properties);
         return communication;
+    }
+
+    /// <summary>
+    /// A read-only data point refuses every client write, so it can never deliver anything to the
+    /// incoming port. Since read-only is what a data point is unless somebody says otherwise, the
+    /// port says so rather than staying silent about a configuration that will never carry a value.
+    /// </summary>
+    [Fact]
+    public async Task Warns_about_a_read_only_data_point_Async()
+    {
+        FakeLogger<IOpcUaServer> logger = new();
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    DesignId = OpcUaServerNodeDesignId.Folder,
+                    Name = "parent",
+                    Id = Guid.Parse("d05ae944-d731-4cfc-ad02-0b3f35a207a4"),
+                },
+                new()
+                {
+                    DesignId = OpcUaServerNodeDesignId.Variable,
+                    Name = "readOnlyChild",
+                    TransferredChannels = ["readOnly",],
+                    Id = Guid.Parse("a631ad22-3e31-483e-9242-8c4198864c6b"),
+                    ParentId = Guid.Parse("d05ae944-d731-4cfc-ad02-0b3f35a207a4"),
+                    ValueType = typeof(string),
+                    Properties = new() { { OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = true } } },
+                },
+            ]);
+
+        await using OpcUaServerDataPortIncoming _ = new(communication, Substitute.For<IOpcUaServerInstanceManager>(), logger);
+
+        logger.Collector.GetSnapshot().Should().ContainSingle(e =>
+            e.Level == LogLevel.Warning &&
+            e.Message.Contains("read-only") &&
+            e.Message.Contains("readOnlyChild"));
+    }
+
+    [Fact]
+    public async Task Does_not_warn_about_a_writable_data_point_Async()
+    {
+        FakeLogger<IOpcUaServer> logger = new();
+        var communication = CreateCommunication(
+            [
+                new()
+                {
+                    DesignId = OpcUaServerNodeDesignId.Variable,
+                    Name = "writeableChild",
+                    TransferredChannels = ["writeable",],
+                    Id = Guid.Parse("a631ad22-3e31-483e-9242-8c4198864c6b"),
+                    ValueType = typeof(string),
+                    Properties = new() { { OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = false } } },
+                },
+            ]);
+
+        await using OpcUaServerDataPortIncoming _ = new(communication, Substitute.For<IOpcUaServerInstanceManager>(), logger);
+
+        logger.Collector.GetSnapshot().Should().NotContain(e => e.Message.Contains("read-only"));
     }
 
     [Fact]

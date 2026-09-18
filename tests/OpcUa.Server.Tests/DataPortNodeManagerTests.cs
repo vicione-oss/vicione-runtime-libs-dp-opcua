@@ -348,8 +348,7 @@ public class DataPortNodeManager_OnWriteValue
             properties.Add(OpcUaServerDataPortPropertyNames.Minimum, minimum);
         if (maximum is not null)
             properties.Add(OpcUaServerDataPortPropertyNames.Maximum, maximum);
-        if (readOnly)
-            properties.Add(OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = true });
+        properties.Add(OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = readOnly });
 
         return properties;
     }
@@ -425,7 +424,30 @@ public class DataPortNodeManager_CreateAddressSpace
         (accessLevel & AccessLevels.TimestampWrite).Should().Be(0);
     }
 
-    private static DataPortNodeManager CreateNodeManager(string childDesignId, List<string> childChannels, bool readOnly = false)
+    /// <summary>
+    /// A configuration that carries no <c>Read only</c> property at all - a hand-written one, or one
+    /// written before the property existed - is read-only too, so that the answer does not depend on
+    /// which of the two the data point came from.
+    /// </summary>
+    [Fact]
+    public void Advertises_no_write_on_a_data_point_without_the_read_only_property()
+    {
+        using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel], readOnly: null);
+
+        var accessLevel = manager.GetNodeState(ValueChannel).AccessLevel;
+
+        (accessLevel & AccessLevels.CurrentWrite).Should().Be(0);
+        (accessLevel & AccessLevels.StatusWrite).Should().Be(0);
+        (accessLevel & AccessLevels.TimestampWrite).Should().Be(0);
+    }
+
+    /// <param name="childDesignId">The design of the envelope child below the data point.</param>
+    /// <param name="childChannels">The channels the envelope child is linked to.</param>
+    /// <param name="readOnly">
+    /// The value of the <c>Read only</c> property, or <c>null</c> for a data point that does not
+    /// carry the property at all.
+    /// </param>
+    private static DataPortNodeManager CreateNodeManager(string childDesignId, List<string> childChannels, bool? readOnly = false)
     {
         Node folder = new() { Id = Guid.NewGuid(), Name = "folder", DesignId = OpcUaServerNodeDesignId.Folder };
         Node variable = new()
@@ -437,8 +459,8 @@ public class DataPortNodeManager_CreateAddressSpace
             ValueType = typeof(double),
             AffectedChannels = [ValueChannel],
             TransferredChannels = [ValueChannel, .. childChannels],
-            Properties = readOnly
-                ? new() { { OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = true } } }
+            Properties = readOnly is { } value
+                ? new() { { OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = value } } }
                 : [],
         };
         Node child = new()
