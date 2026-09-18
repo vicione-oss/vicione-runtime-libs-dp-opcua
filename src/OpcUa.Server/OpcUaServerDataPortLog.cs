@@ -45,4 +45,7 @@ internal static partial class OpcUaServerDataPortLog
 
     [LoggerMessage(12, LogLevel.Warning, "Login attempt for '{Username}' throttled. Remaining delay: {RemainingDelay}.")]
     internal static partial void LogLoginThrottled(this ILogger logger, string? username, TimeSpan remainingDelay);
+
+    [LoggerMessage(13, LogLevel.Warning, "Anonymous access rejected for session '{SessionId}'. The server authenticates its users.")]
+    internal static partial void LogAnonymousAccessRejected(this ILogger logger, string sessionId);
 }

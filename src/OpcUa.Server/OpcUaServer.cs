@@ -120,9 +120,6 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
     {
         var manager = base.CreateSessionManager(server, configuration);
 
-        if (string.IsNullOrEmpty(_properties.User) && string.IsNullOrEmpty(_properties.Password))
-            return manager;
-
         manager.ImpersonateUser += ImpersonateUser;
 
         return manager;
@@ -161,8 +158,20 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
         };
     }
 
+    /// <summary>
+    /// A client may present an anonymous token whatever the server advertises, so the configured
+    /// authentication type is what decides whether it gets a session.
+    /// </summary>
     internal RoleBasedIdentity HandleAnonymousAccess(string sessionId)
     {
+        if (_properties.UserAuthenticationType is not UserAuthenticationType.Anonymous)
+        {
+            logger.LogAnonymousAccessRejected(sessionId);
+
+            throw ServiceResultException.Create(StatusCodes.BadIdentityTokenRejected,
+                "Anonymous access is not allowed on this server.");
+        }
+
         logger.LogAnonymousAccess(sessionId);
         return new RoleBasedIdentity(new UserIdentity(), [Role.Anonymous]);
     }

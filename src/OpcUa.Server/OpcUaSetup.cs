@@ -11,6 +11,14 @@ internal static class OpcUaSetup
         if (properties.MinPublishingInterval > properties.MaxPublishingInterval)
             throw new InvalidOperationException($"MinPublishingInterval ({properties.MinPublishingInterval}) must be less than or equal to MaxPublishingInterval ({properties.MaxPublishingInterval}).");
 
+        // A server that advertises a user name token policy and holds no credentials to check it
+        // against would let every caller in, so it does not start at all.
+        if (properties.UserAuthenticationType is UserAuthenticationType.Basic
+            && (string.IsNullOrEmpty(properties.User) || string.IsNullOrEmpty(properties.Password)))
+        {
+            throw new InvalidOperationException("Basic user authentication requires a user and a password.");
+        }
+
         var config = quotasConfig ?? TransportQuotasConfiguration.Default;
         ServerConfiguration serverConfiguration = new();
         serverConfiguration.BaseAddresses.Add($"opc.tcp://{properties.Server}:{properties.Port.ToString(CultureInfo.InvariantCulture)}/{properties.Endpoint}");
