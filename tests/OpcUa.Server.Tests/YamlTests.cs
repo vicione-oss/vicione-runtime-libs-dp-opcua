@@ -66,9 +66,11 @@ public class YamlTests
     {
         var metadata = RulesDeserializer.Deserialize("OpcUaServer.yaml");
 
-        metadata.PropertyTypes
+        var defaultValue = metadata.PropertyTypes
             .Single(p => p.Id == OpcUaServerDataPortPropertyNames.ReadOnly)
-            .DefaultValue.Should().Be(true);
+            .DefaultValue;
+
+        Convert.ToBoolean(defaultValue, CultureInfo.InvariantCulture).Should().BeTrue();
     }
 
     [Fact]

@@ -452,10 +452,10 @@ Properties:
 
   - Id          : ReadOnly
     Name        : "Read only"
-    Description : "Read only"
+    Description : "Serves the data point without write access, so that a client can read its value but not write one. Clear it to let clients write to the data point."
     DataType    : Bool
     UiControl   : CheckBox
-    DefaultValue: false
+    DefaultValue: true
 
 Icons:
 

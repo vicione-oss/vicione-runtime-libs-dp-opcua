@@ -114,7 +114,9 @@ internal sealed class DataPortNodeManager : NodeManager
         if (parent is null)
             throw new InvalidOperationException("Variable must have a parent.");
 
-        var isReadOnly = node.GetPropertyValueOrDefault(OpcUaServerDataPortPropertyNames.ReadOnly, false);
+        // The fallback matches the default the ruleset declares, so a hand-written configuration
+        // that omits the property is served the same way as one the editor produced.
+        var isReadOnly = node.GetPropertyValueOrDefault(OpcUaServerDataPortPropertyNames.ReadOnly, true);
         var variableNode = CreateVariable(parent, node.Name, GetDatatypeId(node.ValueType), ValueRanks.Scalar, isReadOnly, false);
 
         if (!isReadOnly)
