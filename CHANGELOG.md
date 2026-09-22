@@ -13,6 +13,7 @@
 - Update `.yaml` files format to `2.0.0` (`ViciOne.TreeBuilder`)
 - Unify namespaces in DataPort yamls
 - Limit the OPC UA client browse to the `MaxDepth` of `64` levels declared for the DataPort node tree; a server nesting deeper now fails the data port connect with an error naming the node and the path down to it
+- Rename the company to `ViciOne open automation gmbh` in the package metadata, the license and the `Author` of the `.yaml` files
 - Update `ViciOne.TreeBuilder` to `2.1.0`
 
 ### Fixed
