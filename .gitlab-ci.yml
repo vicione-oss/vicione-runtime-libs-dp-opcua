@@ -36,121 +36,211 @@
   - *rule_mr
   - *rule_web
 
-.rules_manual: &rules_manual
-  - *rule_tag_manual
-  - *rule_default_branch_manual
-  - *rule_mr_manual
-  - *rule_web_manual
-
-.rules_only_tags: &rules_only_tags
-  - *rule_tag
-
 .rules_not_tags: &rules_not_tags
   - *rule_default_branch
   - *rule_mr
   - *rule_web
 
-default:
-  image: mcr.microsoft.com/dotnet/sdk:10.0
+.rules_only_tags_manual: &rules_only_tags_manual
+  - *rule_tag_manual
+
+.rules_not_tags_manual: &rules_not_tags_manual
+  - *rule_default_branch_manual
+  - *rule_mr_manual
+  - *rule_web_manual
+
+.exec_matrix: &exec_matrix
+  - OS: linux
+    ARCH: [x64, arm64]
+  - OS: win
+    ARCH: [x64]
+
+.update_nuget_source_ro: &update_nuget_source_ro
+  - dotnet nuget update source JFrogNuGetProxy --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
+  - dotnet nuget update source JFrogViciOne --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
 
 stages:
   - build
   - test
   - pack
   - publish
+  - release
 
 include:
   - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/version/version-calc@v1.2.0
     inputs:
       rules: *rules_always
-  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-restore@2
+  # Every module uses the same runtime identifiers, so one job serves them all.
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/module-packaging/runtime-identifier@v0.2.0
+    inputs:
+      project: "src/OpcUa.Client/OpcUa.Client.csproj"
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-restore@v2.7.1
     inputs:
       before_script:
-        - dotnet nuget update source JFrogNuGetProxy --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
-        - dotnet nuget update source JFrogViciOne --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
+        - *update_nuget_source_ro
       rules: *rules_always
-  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-build@2
-    inputs:
-      rules: *rules_only_tags
-  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-artifacts@2
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-artifacts@v2.7.1
     inputs:
       name: "dotnet Build+Test"
       stage: test
       rules: *rules_not_tags
       before_script:
-        - dotnet nuget update source JFrogNuGetProxy --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
+        - *update_nuget_source_ro
       build: true
       test: true
       test_coverage: true
       test_filter: "/[(Category!=System)&(Category!=Integration)&(Category!=Interoperability)]"
-  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-test@2
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-test@v2.7.1
     inputs:
       name: "dotnet Interoperability Test"
       rules: *rules_not_tags
       before_script:
-        - dotnet nuget update source JFrogNuGetProxy --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
+        - *update_nuget_source_ro
       build_job_name: "dotnet Build+Test"
       filter: "/[Category=Interoperability]"
-  - project: 'vicione-oss/tooling/templates'
-    file: '/CI-Templates/v2/dotnet.yml'
-  - project: 'vicione-oss/tooling/ci-templates'
-    file: '/project/v1/dotnet.yml'
-
-Push OPCUA Client binaries:
-  extends: .dotnet-release-raw-rids
-  stage: publish
-  rules:
-    - <<: *rule_tag
-      variables:
-        SERVER: 'https://ifm.jfrog.io/artifactory/vicione-suite-staging'
-    - *rule_default_branch_manual
-    - *rule_mr_manual
-    - *rule_web_manual
-  variables:
-    SERVER: 'https://ifm.jfrog.io/artifactory/vicione-suite-dev'
-    USER: ${Raw_User_RW_JFrog}
-    PASSWORD: ${Raw_PW_RW_JFrog}
-    PROJECT: 'src/OpcUa.Client/OpcUa.Client.csproj'
-    DST_DIRECTORY: 'fbs/ViciOne.Suite.DataPort.OpcUa.Client'
-    METADATA_FILE: 'src/OpcUa.Client/metadata.json'
-    METADATA_VERSION_FILE: 'VERSION'
-    METADATA_MIN_VERSION_FILE: 'VERSION_CORE'
-    METADATA_MIN_VERSION_KEY: 'MinCoreVersion'
-  before_script:
-    - dotnet nuget update source JFrogNuGetProxy --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
-    - dotnet nuget update source JFrogViciOne --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
-  after_script:
-    - !reference [ .push-metadata ]
-
-Push OPCUA Server binaries:
-  extends: .dotnet-release-raw-rids
-  stage: publish
-  rules:
-    - <<: *rule_tag
-      variables:
-        SERVER: 'https://ifm.jfrog.io/artifactory/vicione-suite-staging'
-    - *rule_default_branch_manual
-    - *rule_mr_manual
-    - *rule_web_manual
-  variables:
-    SERVER: 'https://ifm.jfrog.io/artifactory/vicione-suite-dev'
-    USER: ${Raw_User_RW_JFrog}
-    PASSWORD: ${Raw_PW_RW_JFrog}
-    PROJECT: 'src/OpcUa.Server/OpcUa.Server.csproj'
-    DST_DIRECTORY: 'fbs/ViciOne.Suite.DataPort.OpcUa.Server'
-    METADATA_FILE: 'src/OpcUa.Server/metadata.json'
-    METADATA_VERSION_FILE: 'VERSION'
-    METADATA_MIN_VERSION_FILE: 'VERSION_CORE'
-    METADATA_MIN_VERSION_KEY: 'MinCoreVersion'
-  before_script:
-    - dotnet nuget update source JFrogNuGetProxy --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
-    - dotnet nuget update source JFrogViciOne --configfile NuGet.Config -u $NuGet_User_JFrog -p $NuGet_PW_JFrog --store-password-in-clear-text
-  after_script:
-    - !reference [ .push-metadata ]
-
-Publish binaries:
-  extends: .dotnet-release-public
-  stage: publish
-  needs:
-    - Push OPCUA Client binaries
-    - Push OPCUA Server binaries
+  ### OpcUa.Client
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/module-packaging/metadata@v0.2.0
+    inputs:
+      name: "OpcUa.Client Metadata"
+      stage: build
+      rules: *rules_always
+      project: "src/OpcUa.Client/OpcUa.Client.csproj"
+      module_version: "${Version}"
+      metadata_json: "src/OpcUa.Client/metadata.json"
+      metadata_dir: "metadata/OpcUa.Client"
+      min_core_version_file: "VERSION_CORE"
+      min_core_version_property: "MinCoreVersion"
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-publish@v2.7.1
+    inputs:
+      name: "dotnet Publish OpcUa.Client"
+      stage: pack
+      rules:
+        - *rule_tag
+        - *rule_default_branch_manual
+        - *rule_mr_manual
+        - *rule_web_manual
+      project: "src/OpcUa.Client/OpcUa.Client.csproj"
+      output_directory: "artifacts/OpcUa.Client/${OS}-${ARCH}"
+      before_script:
+        - *update_nuget_source_ro
+        - dotnet restore
+      execution_matrix: *exec_matrix
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/module-packaging/package-module@v0.2.0
+    inputs:
+      name: "Pack OpcUa.Client binaries"
+      stage: pack
+      rules: *rules_always
+      publish_job: "dotnet Publish OpcUa.Client"
+      metadata_job: "OpcUa.Client Metadata"
+      build_dir: "artifacts/OpcUa.Client"
+      metadata_dir: "metadata/OpcUa.Client"
+      before_script:
+        - apt update
+        - apt install jq zip -y
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/jfrog/release@v2.0.1
+    inputs:
+      name: "Push OpcUa.Client binaries (dev)"
+      stage: publish
+      rules: *rules_not_tags_manual
+      repository: "vicione-suite-dev"
+      upload_path: "fbs/ViciOne.Suite.DataPort.OpcUa.Client"
+      needs:
+        - "OpcUa.Client Metadata"
+        - "Pack OpcUa.Client binaries"
+      artifacts:
+        - "artifacts/OpcUa.Client/**/*json"
+        - "artifacts/OpcUa.Client/**/*zip"
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/jfrog/release@v2.0.1
+    inputs:
+      name: "Push OpcUa.Client binaries (staging)"
+      stage: publish
+      rules: *rules_only_tags_manual
+      repository: "vicione-suite-staging"
+      upload_path: "fbs/ViciOne.Suite.DataPort.OpcUa.Client"
+      needs:
+        - "OpcUa.Client Metadata"
+        - "Pack OpcUa.Client binaries"
+      artifacts:
+        - "artifacts/OpcUa.Client/**/*json"
+        - "artifacts/OpcUa.Client/**/*zip"
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/jfrog/promote@v2.0.1
+    inputs:
+      name: "Release OpcUa.Client binaries"
+      stage: release
+      rules: *rules_only_tags_manual
+      source_repository: "vicione-suite-staging"
+      destination_repository: "vicione-suite"
+      remote_path: "fbs/ViciOne.Suite.DataPort.OpcUa.Client"
+  ### OpcUa.Server
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/module-packaging/metadata@v0.2.0
+    inputs:
+      name: "OpcUa.Server Metadata"
+      stage: build
+      rules: *rules_always
+      project: "src/OpcUa.Server/OpcUa.Server.csproj"
+      module_version: "${Version}"
+      metadata_json: "src/OpcUa.Server/metadata.json"
+      metadata_dir: "metadata/OpcUa.Server"
+      min_core_version_file: "VERSION_CORE"
+      min_core_version_property: "MinCoreVersion"
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/dotnet-component/dotnet-publish@v2.7.1
+    inputs:
+      name: "dotnet Publish OpcUa.Server"
+      stage: pack
+      rules:
+        - *rule_tag
+        - *rule_default_branch_manual
+        - *rule_mr_manual
+        - *rule_web_manual
+      project: "src/OpcUa.Server/OpcUa.Server.csproj"
+      output_directory: "artifacts/OpcUa.Server/${OS}-${ARCH}"
+      before_script:
+        - *update_nuget_source_ro
+        - dotnet restore
+      execution_matrix: *exec_matrix
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/module-packaging/package-module@v0.2.0
+    inputs:
+      name: "Pack OpcUa.Server binaries"
+      stage: pack
+      rules: *rules_always
+      publish_job: "dotnet Publish OpcUa.Server"
+      metadata_job: "OpcUa.Server Metadata"
+      build_dir: "artifacts/OpcUa.Server"
+      metadata_dir: "metadata/OpcUa.Server"
+      before_script:
+        - apt update
+        - apt install jq zip -y
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/jfrog/release@v2.0.1
+    inputs:
+      name: "Push OpcUa.Server binaries (dev)"
+      stage: publish
+      rules: *rules_not_tags_manual
+      repository: "vicione-suite-dev"
+      upload_path: "fbs/ViciOne.Suite.DataPort.OpcUa.Server"
+      needs:
+        - "OpcUa.Server Metadata"
+        - "Pack OpcUa.Server binaries"
+      artifacts:
+        - "artifacts/OpcUa.Server/**/*json"
+        - "artifacts/OpcUa.Server/**/*zip"
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/jfrog/release@v2.0.1
+    inputs:
+      name: "Push OpcUa.Server binaries (staging)"
+      stage: publish
+      rules: *rules_only_tags_manual
+      repository: "vicione-suite-staging"
+      upload_path: "fbs/ViciOne.Suite.DataPort.OpcUa.Server"
+      needs:
+        - "OpcUa.Server Metadata"
+        - "Pack OpcUa.Server binaries"
+      artifacts:
+        - "artifacts/OpcUa.Server/**/*json"
+        - "artifacts/OpcUa.Server/**/*zip"
+  - component: $CI_SERVER_FQDN/vicione-oss/tooling/components/jfrog/promote@v2.0.1
+    inputs:
+      name: "Release OpcUa.Server binaries"
+      stage: release
+      rules: *rules_only_tags_manual
+      source_repository: "vicione-suite-staging"
+      destination_repository: "vicione-suite"
+      remote_path: "fbs/ViciOne.Suite.DataPort.OpcUa.Server"
