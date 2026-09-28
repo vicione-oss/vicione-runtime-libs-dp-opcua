@@ -341,3 +341,104 @@ public sealed class OpcUaClient_BrowseAddressSpaceAsync
     private static ReferenceDescriptionCollection References(string[] displayNames)
         => [.. displayNames.Select(name => new ReferenceDescription { NodeId = new ExpandedNodeId(NodeIdOf(name)), DisplayName = name, })];
 }
+
+/// <summary>
+/// Covers what a notification actually carries. The two timestamps an OPC UA value holds mean
+/// different things and a data point offers a child for each, so it matters that a real server sends
+/// both and that the client keeps them apart.
+/// </summary>
+[Collection(OpcUaTestEnvironment.Name)]
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaClient_SubscribeAsync(OpcUaTestSystem opcUa)
+{
+    [Fact]
+    public async Task Reports_both_timestamps_a_server_sends_with_a_value_Async()
+    {
+        using OpcUaClient client = new(opcUa.Communication);
+
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+
+        try
+        {
+            OpcUaValue received = default;
+            TaskCompletionSource notified = new();
+
+            // The server's own clock: every server has it, it changes on its own, and it is stamped
+            // the way the specification asks for. A node browsed out of the address space is none of
+            // those things - a static one may never publish at all.
+            await client.SubscribeAsync(
+                VariableIds.Server_ServerStatus_CurrentTime,
+                value => { received = value; notified.TrySetResult(); },
+                TestContext.Current.CancellationToken);
+
+            await Task.WhenAny(notified.Task, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+
+            notified.Task.IsCompleted.Should().BeTrue("the server has to publish the value of a monitored item");
+            received.SourceTimestamp.Should().NotBe(DateTime.MinValue);
+            received.ServerTimestamp.Should().NotBe(DateTime.MinValue);
+            received.Timestamp.Should().Be(received.SourceTimestamp, "the value is reported for the time it was produced");
+        }
+        finally
+        {
+            await client.DisconnectAsync(TestContext.Current.CancellationToken);
+        }
+    }
+}
+
+[Collection(OpcUaTestEnvironment.Name)]
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaClient_WriteValuesAsync(OpcUaTestSystem opcUa)
+{
+    /// <summary>
+    /// A cycle that carries only envelope children resolves to no write at all, which is ordinary -
+    /// their values ride on the next write of their parent.
+    /// </summary>
+    [Fact]
+    public async Task Writes_nothing_without_asking_the_server_Async()
+    {
+        using OpcUaClient client = new(opcUa.Communication);
+
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+
+        try
+        {
+            var act = () => client.WriteValuesAsync([], TestContext.Current.CancellationToken);
+
+            await act.Should().NotThrowAsync();
+        }
+        finally
+        {
+            await client.DisconnectAsync(TestContext.Current.CancellationToken);
+        }
+    }
+}
+
+public sealed class OpcUaClient_DescribeEnvelope
+{
+    private static readonly DateTime s_sourceTimestamp = new(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+
+    [Fact]
+    public void Describes_nothing_for_a_value_written_as_good_and_unstamped()
+        => OpcUaClient.DescribeEnvelope(new DataValue { Value = 3.4d }).Should().BeNull();
+
+    /// <summary>
+    /// A status of good severity is still a status the server has to accept, so only the plain Good
+    /// code counts as a value written without one.
+    /// </summary>
+    [Theory]
+    [InlineData(StatusCodes.BadCommunicationError, "the status code 'BadCommunicationError'")]
+    [InlineData(StatusCodes.GoodLocalOverride, "the status code 'GoodLocalOverride'")]
+    [InlineData(0x80FF0000u, "the status code '0x80FF0000'")]
+    public void Describes_the_status_code_written_with_a_value(uint statusCode, string expected)
+        => OpcUaClient.DescribeEnvelope(new DataValue { Value = 3.4d, StatusCode = statusCode }).Should().Be(expected);
+
+    [Fact]
+    public void Describes_the_source_timestamp_written_with_a_value()
+        => OpcUaClient.DescribeEnvelope(new DataValue { Value = 3.4d, SourceTimestamp = s_sourceTimestamp })
+            .Should().Be("the source timestamp '2026-03-04T05:06:07.0000000Z'");
+
+    [Fact]
+    public void Describes_both_when_a_value_is_written_with_both()
+        => OpcUaClient.DescribeEnvelope(new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, SourceTimestamp = s_sourceTimestamp })
+            .Should().Be("the status code 'BadCommunicationError' and the source timestamp '2026-03-04T05:06:07.0000000Z'");
+}

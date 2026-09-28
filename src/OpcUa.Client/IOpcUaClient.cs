@@ -11,6 +11,6 @@ internal interface IOpcUaClient
     Task<IReadOnlyCollection<OpcUaNode>> BrowseNodesAsync(CancellationToken cancellationToken);
     Task ConnectAsync(CancellationToken cancellationToken);
     Task DisconnectAsync(CancellationToken cancellationToken);
-    Task SubscribeAsync(NodeId nodeId, Action<object?, DateTime> callback, CancellationToken cancellationToken);
-    Task WriteValuesAsync(IEnumerable<(NodeId NodeId, object? Value)> values, CancellationToken cancellationToken);
+    Task SubscribeAsync(NodeId nodeId, Action<OpcUaValue> callback, CancellationToken cancellationToken);
+    Task WriteValuesAsync(IEnumerable<OpcUaWrite> writes, CancellationToken cancellationToken);
 }

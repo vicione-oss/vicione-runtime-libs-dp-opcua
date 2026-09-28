@@ -22,4 +22,7 @@ internal static partial class OpcUaClientDataPortLog
 
     [LoggerMessage(5, LogLevel.Warning, "OPC UA client '{ApplicationName}' skips node '{DisplayName}' below '{BrowsedPath}': it is already on that path.")]
     internal static partial void LogBrowseCycleSkipped(this ILogger logger, string applicationName, string displayName, string browsedPath);
+
+    [LoggerMessage(6, LogLevel.Error, "Node '{NodeId}' refused a value written with {Envelope}, so the value did not arrive either. The server does not accept a written status or timestamp for this node; unlink the 'Status code' or 'Source timestamp' child of the data point, or link it only to servers that do.")]
+    internal static partial void LogEnvelopeWriteRefused(this ILogger logger, string nodeId, string envelope);
 }

@@ -61,7 +61,12 @@ internal class NodeManager(IServerInternal server, ApplicationConfiguration conf
         };
 
         if (!readOnly)
-            variable.AccessLevel |= AccessLevels.CurrentWrite;
+        {
+            // StatusWrite and TimestampWrite advertise that a client may write a status and a source
+            // timestamp with the value, which is what a client reads to decide whether to offer it.
+            // This stack accepts both at the node either way; a ServerTimestamp it always refuses.
+            variable.AccessLevel |= AccessLevels.CurrentWrite | AccessLevels.StatusWrite | AccessLevels.TimestampWrite;
+        }
         if (historizing)
             variable.AccessLevel |= AccessLevels.HistoryRead;
 
@@ -87,15 +92,15 @@ internal class NodeManager(IServerInternal server, ApplicationConfiguration conf
     protected static bool IsNaN(object value)
         => (value is double dvalue && double.IsNaN(dvalue)) || (value is float fvalue && float.IsNaN(fvalue));
 
+    /// <summary>
+    /// Serves a variable with the status linked to it, as it is, also while its value is not a number.
+    /// </summary>
     public async Task UpdateVariableStateAsync(BaseDataVariableState variable, StatusCode statusCode)
     {
         await _publishSemaphore.WaitAsync();
 
         try
         {
-            if (IsNaN(variable.Value) && statusCode == StatusCodes.Good)
-                statusCode = StatusCodes.BadWaitingForInitialData;
-
             variable.StatusCode = statusCode;
             // notifies any monitored items that the value has changed.
             variable.ClearChangeMasks(SystemContext, false);
@@ -106,7 +111,12 @@ internal class NodeManager(IServerInternal server, ApplicationConfiguration conf
         }
     }
 
-    public async Task<bool> WriteVariableValueAsync(BaseDataVariableState variable, object? value, DateTime timeStamp, bool writeOnlyChanged)
+    /// <summary>
+    /// Serves a value with the status linked to it, as it is. Without one, a value that is not a
+    /// number marks the variable as waiting for its initial data, and the next value that is clears
+    /// that again.
+    /// </summary>
+    public async Task<bool> WriteVariableValueAsync(BaseDataVariableState variable, object? value, DateTime timeStamp, StatusCode? statusCode, bool writeOnlyChanged)
     {
         if (writeOnlyChanged && variable.Value.Equals(value))
             return false;
@@ -124,7 +134,11 @@ internal class NodeManager(IServerInternal server, ApplicationConfiguration conf
             variable.Value = value;
             variable.Timestamp = timeStamp;
 
-            if (IsNaN(value))
+            if (statusCode is { } linkedStatusCode)
+            {
+                variable.StatusCode = linkedStatusCode;
+            }
+            else if (IsNaN(value))
             {
                 variable.StatusCode = StatusCodes.BadWaitingForInitialData;
             }

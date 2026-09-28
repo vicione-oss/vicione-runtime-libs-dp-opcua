@@ -238,7 +238,7 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
         return references[0];
     }
 
-    public async Task SubscribeAsync(NodeId nodeId, Action<object?, DateTime> callback, CancellationToken cancellationToken)
+    public async Task SubscribeAsync(NodeId nodeId, Action<OpcUaValue> callback, CancellationToken cancellationToken)
     {
         await _sessionSemaphore.WaitAsync(cancellationToken);
 
@@ -268,7 +268,7 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
             {
                 if (e.NotificationValue is not MonitoredItemNotification notificationValue)
                     return;
-                callback(notificationValue.Value.Value, notificationValue.Message.PublishTime);
+                callback(OpcUaValue.Of(notificationValue.Value, notificationValue.Message.PublishTime));
             };
 
             _subscription.AddItem(monitoredItem);
@@ -280,7 +280,26 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
         }
     }
 
-    public async Task WriteValuesAsync(IEnumerable<(NodeId NodeId, object? Value)> values, CancellationToken cancellationToken)
+    /// <summary>
+    /// What a write asks the server to take besides the value, which is what it may refuse with
+    /// BadWriteNotSupported without saying which part it means, or <c>null</c> when it asks for
+    /// nothing besides the value.
+    /// </summary>
+    internal static string? DescribeEnvelope(DataValue written)
+    {
+        var writesStatusCode = written.StatusCode != StatusCodes.Good;
+        var writesSourceTimestamp = written.SourceTimestamp != DateTime.MinValue;
+
+        return (writesStatusCode, writesSourceTimestamp) switch
+        {
+            (true, true) => $"the status code '{OpcUaStatusCodes.NameOf(written.StatusCode)}' and the source timestamp '{written.SourceTimestamp:O}'",
+            (true, false) => $"the status code '{OpcUaStatusCodes.NameOf(written.StatusCode)}'",
+            (false, true) => $"the source timestamp '{written.SourceTimestamp:O}'",
+            _ => null,
+        };
+    }
+
+    public async Task WriteValuesAsync(IEnumerable<OpcUaWrite> writes, CancellationToken cancellationToken)
     {
         await _sessionSemaphore.WaitAsync(cancellationToken);
 
@@ -291,15 +310,21 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
 
             WriteValueCollection nodesToWrite = [];
 
-            foreach (var (nodeId, value) in values)
+            foreach (var (nodeId, value, statusCode, sourceTimestamp) in writes)
             {
                 nodesToWrite.Add(new()
                 {
                     AttributeId = Attributes.Value,
                     NodeId = nodeId,
-                    Value = new DataValue() { Value = value, },
+                    Value = new DataValue() { Value = value, StatusCode = statusCode, SourceTimestamp = sourceTimestamp, },
                 });
             }
+
+            // A cycle that carries only envelope children resolves to nothing to write, which is
+            // ordinary - the values ride on the next write of their parent. Asking the server to
+            // write none would come back as BadNothingToDo.
+            if (nodesToWrite.Count == 0)
+                return;
 
             var response = await _session.WriteAsync(null, nodesToWrite, cancellationToken);
 
@@ -310,8 +335,17 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
             {
                 var result = response.Results[i];
 
-                if (StatusCode.IsNotGood(result))
-                    _logger?.LogWriteFailure(nodesToWrite[i].NodeId.Identifier.ToString() ?? string.Empty, result.ToString());
+                if (!StatusCode.IsNotGood(result))
+                    continue;
+
+                var identifier = nodesToWrite[i].NodeId.Identifier.ToString() ?? string.Empty;
+
+                // A refused status write loses the value with it, and the reason is not in the
+                // result: it says only that the write was not supported, not which part of it.
+                if (result.Code == StatusCodes.BadWriteNotSupported && DescribeEnvelope(nodesToWrite[i].Value) is { } envelope)
+                    _logger?.LogEnvelopeWriteRefused(identifier, envelope);
+                else
+                    _logger?.LogWriteFailure(identifier, result.ToString());
             }
         }
         finally

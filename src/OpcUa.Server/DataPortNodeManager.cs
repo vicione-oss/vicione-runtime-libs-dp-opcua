@@ -24,15 +24,17 @@ internal sealed class DataPortNodeManager : NodeManager
     private readonly Dictionary<string, BaseDataVariableState> _channelNodes = [];
     private readonly List<NodeState> _nodes = [];
     private readonly IReadOnlyCollection<IReadOnlyCollection<DataPortNode>> _routes;
+    private readonly HashSet<string> _envelopeChildChannels;
     private readonly TimeProvider _timeProvider;
 
-    public event Action<string, DateTime, object>? ReceiveValue;
+    public event Action<ReceivedWrite>? ReceiveValue;
 
     [SuppressMessage("Style", "IDE0290:Primären Konstruktor verwenden")]
     public DataPortNodeManager(IServerInternal server, ApplicationConfiguration configuration, IReadOnlyCollection<IReadOnlyCollection<DataPortNode>> routes, string @namespace, TimeProvider? timeProvider = null)
         : base(server, configuration, @namespace, timeProvider ?? TimeProvider.System)
     {
         _routes = routes;
+        _envelopeChildChannels = CollectEnvelopeChildChannels(routes);
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -75,6 +77,11 @@ internal sealed class DataPortNodeManager : NodeManager
 
             foreach (var dataPortNode in route)
             {
+                // An envelope child addresses the value of its parent variable, so it is not a node
+                // of the address space and a client never browses to it.
+                if (EnvelopeChildren.IsEnvelopeChild(dataPortNode.DesignId))
+                    continue;
+
                 if (cache.TryGetValue(dataPortNode.Id, out var node))
                 {
                     previousNode = node;
@@ -123,10 +130,48 @@ internal sealed class DataPortNodeManager : NodeManager
         node.TryGetProperty(OpcUaServerDataPortPropertyNames.Minimum, out var min);
         node.TryGetProperty(OpcUaServerDataPortPropertyNames.Maximum, out var max);
 
-        _nodesConfiguration.Add((string)variableNode.NodeId.Identifier, (variableNode, node.TransferredChannels, min, max));
+        // An envelope child has no transfer of its own, so the engine attributes its channel to
+        // this variable. Serving a value on one of those channels would write a status code or a
+        // timestamp where the value belongs, and would raise a client write on the child's channel.
+        var channels = SelectOwnChannels(node);
+
+        _nodesConfiguration.Add((string)variableNode.NodeId.Identifier, (variableNode, channels, min, max));
+
+        foreach (var channel in channels)
+            _channelNodes.Add(channel, variableNode);
+    }
+
+    private List<string> SelectOwnChannels(DataPortNode node)
+    {
+        List<string> channels = new(node.TransferredChannels.Count);
 
         foreach (var channel in node.TransferredChannels)
-            _channelNodes.Add(channel, variableNode);
+        {
+            if (!_envelopeChildChannels.Contains(channel))
+                channels.Add(channel);
+        }
+
+        return channels;
+    }
+
+    /// <summary>
+    /// The channels of every envelope child in the routes. Both ports register their tree with the
+    /// server, so a child linked both ways carries one channel per direction here.
+    /// </summary>
+    private static HashSet<string> CollectEnvelopeChildChannels(IReadOnlyCollection<IReadOnlyCollection<DataPortNode>> routes)
+    {
+        HashSet<string> channels = [];
+
+        foreach (var route in routes)
+        {
+            foreach (var node in route)
+            {
+                if (EnvelopeChildren.IsEnvelopeChild(node.DesignId))
+                    channels.UnionWith(node.AffectedChannels);
+            }
+        }
+
+        return channels;
     }
 
     private static NodeId GetDatatypeId(Type? valueType)
@@ -149,11 +194,16 @@ internal sealed class DataPortNodeManager : NodeManager
         if (!IsInRange(config.MinProperty, config.MaxProperty, value))
             return StatusCodes.BadOutOfRange;
 
+        // A client is free to write without a source timestamp. The variable is stamped with the
+        // moment the write arrived, but the Source timestamp child reports only what the client
+        // actually sent, so the two are carried apart.
+        var sourceTimestamp = timestamp;
+
         if (timestamp == DateTime.MinValue)
             timestamp = _timeProvider.GetUtcNow().DateTime;
 
         foreach (var channel in config.Channels)
-            ReceiveValue?.Invoke(channel, timestamp, value);
+            ReceiveValue?.Invoke(new(channel, value, timestamp, statusCode, sourceTimestamp));
 
         return StatusCodes.Good;
     }

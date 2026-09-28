@@ -20,4 +20,8 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\OpcUa.Shared\**\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+
 </Project>

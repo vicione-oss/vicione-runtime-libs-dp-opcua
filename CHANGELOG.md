@@ -6,15 +6,20 @@
 
 - Add configurable `SubscriptionPublishingInterval` properties to OPC UA Client
 - Add configurable `MinPublishingInterval` and `MaxPublishingInterval` properties to OPC UA Server
+- Support envelope children on OPC UA data points: a `Status code`, a `Source timestamp` and, on the client, a `Server timestamp` child, each addressing one field of the OPC UA value of their parent instead of a node of their own
 
 ### Changed
 
 - Add new icons to DataPorts
-- Update `.yaml` files format to `2.0.0` (`ViciOne.TreeBuilder`)
+- Update `.yaml` files format to `2.0.0` (`ViciOne.Tree.Builder`)
 - Unify namespaces in DataPort yamls
 - Limit the OPC UA client browse to the `MaxDepth` of `64` levels declared for the DataPort node tree; a server nesting deeper now fails the data port connect with an error naming the node and the path down to it
 - Rename the company to `ViciOne open automation gmbh` in the package metadata, the license and the `Author` of the `.yaml` files
-- Update `ViciOne.TreeBuilder` to `2.1.0`
+- Require `ViciOne.Tree.Builder` `3.0.0` and cluster management `3.0.0`
+- **Breaking:** Replace the `Status` node property of the OPC UA server with the `Status code` envelope child of a data point; a configuration that linked the property has to link the child instead
+- **Breaking:** Implement `IExternalOutgoingCommunication` directly in `OpcUaServerDataPortOutgoing` instead of deriving from `DataPortOutgoingCommunicationWithPropertyHandling`; `SendAsync` takes the values of a cycle in one collection, and the overload with separate process and property values is gone
+- Serve an OPC UA variable with the status code and the source timestamp linked to the envelope children of its data point, a linked status code as it is even for a value that is not a number, and forward the ones a client writes on the same channels; writable data points now advertise `StatusWrite` and `TimestampWrite`
+- Forward the status code, the source timestamp and the server timestamp an OPC UA server sends with a subscribed value on the channels of the envelope children of its data point instead of dropping them, and write a value with the status code and the source timestamp linked to those children instead of the `Good` and the unset timestamp every written value defaulted to
 
 ### Fixed
 
@@ -32,6 +37,7 @@
 - Fix OPC UA server turning every client write into an internal error when a data point's configured minimum or maximum was a different number type than the written value, such as a whole number limit on a float data point; the two are now compared as numbers
 - Fix OPC UA server letting an exception escape into the OPC UA stack when a client writes to a data point it holds no configuration for; the write is now refused with `BadInternalError`
 - Fix OPC UA server logging an account lockout on every failed login, which filled the security audit trail with lockouts that never happened
+- **Breaking:** Fix OPC UA client reporting the time a notification was published as the timestamp of the value it carried, which moved every value to the moment the server batched it rather than the moment it was produced; the source timestamp is now used, falling back to the server timestamp and then to the publish time when a server sends neither, so the values of a device whose clock is off now move with that clock
 
 ## 0.32.0 - 2026-05-11
 
