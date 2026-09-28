@@ -125,6 +125,28 @@ public class OpcUaServer_HandleAnonymousAccess_Logging
             e.Message.Contains("Anonymous access used") &&
             e.Message.Contains("session-3"));
     }
+
+    [Fact]
+    public void Logs_warning_on_a_rejected_anonymous_session()
+    {
+        FakeLogger<IOpcUaServer> logger = new();
+        OpcUaServerDataPortCommunication communication = new()
+        {
+            UserAuthenticationType = 1,
+            User = "admin",
+            Password = "secret",
+            Nodes = [],
+        };
+        using OpcUaServer server = new(communication, logger);
+
+        var act = () => server.HandleAnonymousAccess("session-4");
+
+        act.Should().Throw<ServiceResultException>();
+        logger.Collector.GetSnapshot().Should().ContainSingle(e =>
+            e.Level == LogLevel.Warning &&
+            e.Message.Contains("Anonymous access rejected") &&
+            e.Message.Contains("session-4"));
+    }
 }
 
 public class OpcUaServer_LogInsecureConfigurationWarnings

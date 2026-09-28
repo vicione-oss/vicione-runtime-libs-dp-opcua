@@ -20,6 +20,7 @@
 - **Breaking:** Implement `IExternalOutgoingCommunication` directly in `OpcUaServerDataPortOutgoing` instead of deriving from `DataPortOutgoingCommunicationWithPropertyHandling`; `SendAsync` takes the values of a cycle in one collection, and the overload with separate process and property values is gone
 - Serve an OPC UA variable with the status code and the source timestamp linked to the envelope children of its data point, a linked status code as it is even for a value that is not a number, and forward the ones a client writes on the same channels; writable data points now advertise `StatusWrite` and `TimestampWrite`
 - Forward the status code, the source timestamp and the server timestamp an OPC UA server sends with a subscribed value on the channels of the envelope children of its data point instead of dropping them, and write a value with the status code and the source timestamp linked to those children instead of the `Good` and the unset timestamp every written value defaulted to
+- **Breaking:** Refuse an anonymous OPC UA client session on a server that is not configured for anonymous authentication, instead of granting it whatever the server advertises; `User Authentication Type` now defaults to `Basic`, and a server set to `Basic` without a user and a password refuses to start rather than accepting every client unchecked
 
 ### Fixed
 

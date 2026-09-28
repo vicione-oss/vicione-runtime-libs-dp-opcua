@@ -1,3 +1,5 @@
+using System;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using AwesomeAssertions;
@@ -31,6 +33,28 @@ public class YamlTests
 
         classPropertyNames.Except(yamlPropertyIds.Union(yamlNodeTypeIds))
             .Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// A server data port nobody has configured must not let anonymous clients in, so the ruleset
+    /// has to start it on the authentication type that asks for a user.
+    /// </summary>
+    [Fact]
+    public void Defaults_the_user_authentication_type_to_basic()
+    {
+        var metadata = RulesDeserializer.Deserialize("OpcUaServer.yaml");
+
+        var defaultValue = metadata.PropertyTypes
+            .Single(p => p.Id == nameof(OpcUaServerDataPortCommunication.UserAuthenticationType))
+            .DefaultValue;
+
+        OpcUaServerDataPortCommunication communication = new()
+        {
+            UserAuthenticationType = Convert.ToByte(defaultValue, CultureInfo.InvariantCulture),
+        };
+
+        new OpcUaServerDataPortProperties(communication).UserAuthenticationType
+            .Should().Be(UserAuthenticationType.Basic);
     }
 
     [Fact]
