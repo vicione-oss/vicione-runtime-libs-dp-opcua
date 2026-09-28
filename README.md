@@ -1,4 +1,4 @@
-# DataPort OPC UA
+﻿# DataPort OPC UA
 
 | Provider                        | Incoming | Outgoing | free JSON structure |
 |---------------------------------|:--------:|:--------:|:-------------------:|
@@ -61,8 +61,9 @@ concern and is not part of this.
 ### A read-only data point takes nothing in
 
 `Read only` stops a server variable from accepting a write at all, so no value, status or timestamp
-ever arrives on it and its inbound children are connectors that can never carry anything. Leave the
-property off a data point whose envelope is meant to be received.
+ever arrives on it and its inbound children are connectors that can never carry anything. It is set
+on every data point that does not say otherwise, so a data point whose envelope is meant to be
+received has to clear it.
 
 ### A cycle that carries only children
 

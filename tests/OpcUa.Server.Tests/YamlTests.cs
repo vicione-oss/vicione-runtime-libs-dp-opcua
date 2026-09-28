@@ -57,6 +57,22 @@ public class YamlTests
             .Should().Be(UserAuthenticationType.Basic);
     }
 
+    /// <summary>
+    /// Write access to a data point is a decision somebody makes, so a data point nobody has
+    /// configured is served read-only.
+    /// </summary>
+    [Fact]
+    public void Defaults_a_data_point_to_read_only()
+    {
+        var metadata = RulesDeserializer.Deserialize("OpcUaServer.yaml");
+
+        var defaultValue = metadata.PropertyTypes
+            .Single(p => p.Id == OpcUaServerDataPortPropertyNames.ReadOnly)
+            .DefaultValue;
+
+        Convert.ToBoolean(defaultValue, CultureInfo.InvariantCulture).Should().BeTrue();
+    }
+
     [Fact]
     public void DesignIds_should_be_in_yaml()
     {
