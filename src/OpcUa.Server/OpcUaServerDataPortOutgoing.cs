@@ -22,7 +22,6 @@ public sealed class OpcUaServerDataPortOutgoing : IExternalOutgoingCommunication
     // of a port one after another, so each cycle resolves its values against the envelope the
     // cycles before it left, even while an earlier one is still being served.
     private readonly Dictionary<string, StatusCode> _statusCodes = [];
-    private readonly Dictionary<string, DateTime> _sourceTimestamps = [];
 
     private readonly IOpcUaServer _server;
 
@@ -55,9 +54,9 @@ public sealed class OpcUaServerDataPortOutgoing : IExternalOutgoingCommunication
     {
         try
         {
-            RememberEnvelopeValues(values);
+            RememberStatusCodes(values);
 
-            var servedValues = ResolveServedValues(values);
+            var servedValues = ResolveServedValues(values, SourceTimestampsOf(values));
             var statusCodesWithoutValue = ResolveStatusCodesWithoutValue(values, servedValues);
 
             await ServeValuesAsync(servedValues, cancellationToken);
@@ -70,37 +69,50 @@ public sealed class OpcUaServerDataPortOutgoing : IExternalOutgoingCommunication
     }
 
     /// <summary>
-    /// A status code and a source timestamp have no write of their own; they are served with the
-    /// value of their parent. The engine sends a channel only in the cycle it changes in, so the
-    /// last of each is remembered and served with every value of that variable until another arrives.
+    /// A status code has no write of its own; it is served with the value of its parent. It is a
+    /// state that holds until it changes, and the engine sends a channel only in the cycle it
+    /// changes in, so the last one is remembered and served with every value of that variable
+    /// until another arrives.
     /// </summary>
-    private void RememberEnvelopeValues(IReadOnlyCollection<ExternalValue> values)
+    private void RememberStatusCodes(IReadOnlyCollection<ExternalValue> values)
     {
         foreach (var value in values)
         {
-            if (!_envelopeChildren.TryGetChild(value.Channel, out var child))
-                continue;
-
-            switch (child.Kind)
-            {
-                case EnvelopeChildKind.StatusCode:
-                    _statusCodes[child.ParentChannel] = OpcUaStatusCodes.ConvertToStatusCode(value.Value, _serverLogger);
-                    break;
-                case EnvelopeChildKind.SourceTimestamp when value.Value is DateTime sourceTimestamp:
-                    _sourceTimestamps[child.ParentChannel] = sourceTimestamp;
-                    break;
-            }
+            if (_envelopeChildren.TryGetChild(value.Channel, out var child) && child.Kind == EnvelopeChildKind.StatusCode)
+                _statusCodes[child.ParentChannel] = OpcUaStatusCodes.ConvertToStatusCode(value.Value, _serverLogger);
         }
     }
 
-    private List<ServedValue> ResolveServedValues(IReadOnlyCollection<ExternalValue> values)
+    /// <summary>
+    /// The source timestamps of this cycle by the channel of their parent. A timestamp belongs to
+    /// the value it arrives with and is not remembered: the engine does not send one again that did
+    /// not change, so carrying it over would serve a later value with the time of an earlier one.
+    /// </summary>
+    private Dictionary<string, DateTime> SourceTimestampsOf(IReadOnlyCollection<ExternalValue> values)
+    {
+        Dictionary<string, DateTime> sourceTimestamps = [];
+
+        foreach (var value in values)
+        {
+            if (_envelopeChildren.TryGetChild(value.Channel, out var child)
+                && child.Kind == EnvelopeChildKind.SourceTimestamp
+                && value.Value is DateTime sourceTimestamp)
+            {
+                sourceTimestamps[child.ParentChannel] = sourceTimestamp;
+            }
+        }
+
+        return sourceTimestamps;
+    }
+
+    private List<ServedValue> ResolveServedValues(IReadOnlyCollection<ExternalValue> values, Dictionary<string, DateTime> sourceTimestamps)
     {
         List<ServedValue> servedValues = new(values.Count);
 
         foreach (var value in values)
         {
             if (!_envelopeChildren.IsChildChannel(value.Channel))
-                servedValues.Add(new(value.Channel, value.Value, SourceTimestampOf(value), StatusCodeOf(value.Channel)));
+                servedValues.Add(new(value.Channel, value.Value, SourceTimestampOf(value, sourceTimestamps), StatusCodeOf(value.Channel)));
         }
 
         return servedValues;
@@ -129,11 +141,11 @@ public sealed class OpcUaServerDataPortOutgoing : IExternalOutgoingCommunication
     }
 
     /// <summary>
-    /// The point in time a variable reports its value was produced. Nothing linked means the value
-    /// is served with the timestamp the engine gave it.
+    /// The point in time a variable reports its value was produced. No source timestamp in the
+    /// cycle of the value means it is served with the timestamp the engine gave it.
     /// </summary>
-    private DateTime SourceTimestampOf(ExternalValue value)
-        => _sourceTimestamps.TryGetValue(value.Channel, out var sourceTimestamp) ? sourceTimestamp : value.Timestamp;
+    private static DateTime SourceTimestampOf(ExternalValue value, Dictionary<string, DateTime> sourceTimestamps)
+        => sourceTimestamps.TryGetValue(value.Channel, out var sourceTimestamp) ? sourceTimestamp : value.Timestamp;
 
     /// <summary>
     /// The status a value is served with, or <c>null</c> when none is linked.

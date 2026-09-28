@@ -22,7 +22,6 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
     // of a port one after another, so each cycle resolves its writes against the envelope the
     // cycles before it left, even while an earlier one is still being written.
     private readonly Dictionary<string, StatusCode> _statusCodes = [];
-    private readonly Dictionary<string, DateTime> _sourceTimestamps = [];
 
     private readonly EnvelopeChildren _envelopeChildren;
     private IOpcUaClient? _client;
@@ -62,9 +61,9 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         if (_client is not null)
         {
             await _instanceManager.ReleaseOpcUaClientAsync(_communication, this, cancellationToken).ConfigureAwait(false);
-            // The node ids are bound to the session and go with it. What the engine last said
-            // about a value is not: dropping it would write the next value as good and unstamped on
-            // a data point whose last known status was bad.
+            // The node ids are bound to the session and go with it. The status code the engine
+            // last sent is not: dropping it would write the next value as good on a data point
+            // whose last known status was bad.
             _channelNodes.Clear();
             _client = null;
         }
@@ -75,38 +74,51 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         if (_client is null)
             throw new InvalidOperationException("OPC UA client is not initialized.");
 
-        RememberEnvelopeValues(values);
+        RememberStatusCodes(values);
 
-        await _client.WriteValuesAsync(ResolveWrites(values), cancellationToken).ConfigureAwait(false);
+        await _client.WriteValuesAsync(ResolveWrites(values, SourceTimestampsOf(values)), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// An envelope child has no write of its own; its value is written with the value of its parent.
-    /// The engine sends a channel only in the cycle it changes in, so the last one is remembered and
-    /// written with every value of that node until another arrives.
+    /// A status code has no write of its own; it is written with the value of its parent. It is a
+    /// state that holds until it changes, and the engine sends a channel only in the cycle it
+    /// changes in, so the last one is remembered and written with every value of that node until
+    /// another arrives.
     /// </summary>
-    private void RememberEnvelopeValues(IReadOnlyCollection<ExternalValue> values)
+    private void RememberStatusCodes(IReadOnlyCollection<ExternalValue> values)
     {
         foreach (var value in values)
         {
-            if (!_envelopeChildren.TryGetChild(value.Channel, out var child))
-                continue;
+            if (_envelopeChildren.TryGetChild(value.Channel, out var child) && child.Kind == EnvelopeChildKind.StatusCode)
+                _statusCodes[child.ParentChannel] = OpcUaStatusCodes.ConvertToStatusCode(value.Value, _clientLogger);
+        }
+    }
 
-            switch (child.Kind)
+    /// <summary>
+    /// The source timestamps of this cycle by the channel of their parent. A timestamp belongs to
+    /// the value it arrives with and is not remembered: the engine does not send one again that did
+    /// not change, so carrying it over would write a later value for the time of an earlier one.
+    /// </summary>
+    private Dictionary<string, DateTime> SourceTimestampsOf(IReadOnlyCollection<ExternalValue> values)
+    {
+        Dictionary<string, DateTime> sourceTimestamps = [];
+
+        foreach (var value in values)
+        {
+            if (_envelopeChildren.TryGetChild(value.Channel, out var child)
+                && child.Kind == EnvelopeChildKind.SourceTimestamp
+                && value.Value is DateTime sourceTimestamp)
             {
-                case EnvelopeChildKind.StatusCode:
-                    _statusCodes[child.ParentChannel] = OpcUaStatusCodes.ConvertToStatusCode(value.Value, _clientLogger);
-                    break;
-                case EnvelopeChildKind.SourceTimestamp when value.Value is DateTime sourceTimestamp:
-                    _sourceTimestamps[child.ParentChannel] = sourceTimestamp;
-                    break;
+                sourceTimestamps[child.ParentChannel] = sourceTimestamp;
             }
         }
+
+        return sourceTimestamps;
     }
 
     // Resolving every channel first keeps an unmapped one from surfacing inside the write, once
     // part of the batch has already been submitted.
-    private List<OpcUaWrite> ResolveWrites(IReadOnlyCollection<ExternalValue> values)
+    private List<OpcUaWrite> ResolveWrites(IReadOnlyCollection<ExternalValue> values, Dictionary<string, DateTime> sourceTimestamps)
     {
         List<OpcUaWrite> writes = new(values.Count);
 
@@ -118,7 +130,7 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
             if (!_channelNodes.TryGetValue(value.Channel, out var channelNode))
                 throw new InvalidOperationException($"Channel '{value.Channel}' is not mapped to an OPC UA node.");
 
-            writes.Add(new(channelNode.NodeId, value.Value, StatusCodeOf(value.Channel), SourceTimestampOf(value.Channel)));
+            writes.Add(new(channelNode.NodeId, value.Value, StatusCodeOf(value.Channel), SourceTimestampOf(value.Channel, sourceTimestamps)));
         }
 
         return writes;
@@ -132,12 +144,12 @@ public sealed class OpcUaClientDataPortOutgoing : IExternalOutgoingCommunication
         => _statusCodes.TryGetValue(channel, out var statusCode) ? statusCode : StatusCodes.Good;
 
     /// <summary>
-    /// The point in time a value is written for. Nothing linked leaves it unset, which is what a
-    /// <see cref="DataValue"/> carries when no timestamp is set on it and what makes the receiving
-    /// server stamp the value itself.
+    /// The point in time a value is written for. No source timestamp in the cycle of the value
+    /// leaves it unset, which is what a <see cref="DataValue"/> carries when no timestamp is set on
+    /// it and what makes the receiving server stamp the value itself.
     /// </summary>
-    private DateTime SourceTimestampOf(string channel)
-        => _sourceTimestamps.TryGetValue(channel, out var sourceTimestamp) ? sourceTimestamp : DateTime.MinValue;
+    private static DateTime SourceTimestampOf(string channel, Dictionary<string, DateTime> sourceTimestamps)
+        => sourceTimestamps.TryGetValue(channel, out var sourceTimestamp) ? sourceTimestamp : DateTime.MinValue;
 
     private async Task RollBackConnectAsync()
     {

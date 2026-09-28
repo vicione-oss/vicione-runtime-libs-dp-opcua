@@ -400,4 +400,33 @@ public class OpcUaServerDataPortOutgoing_SendAsync
 
         await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, null, cancellation.Token);
     }
+
+    /// <summary>
+    /// A source timestamp belongs to the value it arrives with. The engine does not send a
+    /// timestamp again that did not change, so carrying it over would serve a later value with
+    /// the time of an earlier one.
+    /// </summary>
+    [Fact]
+    public async Task Serves_a_value_of_a_later_cycle_with_its_own_timestamp_Async()
+    {
+        var communication = OutgoingServerSetup.CreateCommunicationWithSourceTimestampChild();
+        var (instanceManager, server, logger) = OutgoingServerSetup.SubstituteServer(communication);
+        using CancellationTokenSource cancellation = new();
+        var produced = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        var later = new DateTime(2026, 3, 4, 5, 7, 0, DateTimeKind.Utc);
+        await using OpcUaServerDataPortOutgoing dataportOutgoing = new(communication, instanceManager, logger);
+
+        await dataportOutgoing.ConnectAsync(cancellation.Token);
+        await dataportOutgoing.SendAsync(0,
+            [
+                new() { Channel = "sent", Timestamp = s_timestamp, Value = produced, },
+                new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
+            ], cancellation.Token);
+        await dataportOutgoing.SendAsync(1,
+            [
+                new() { Channel = "readonly", Timestamp = later, Value = "later value", },
+            ], cancellation.Token);
+
+        await server.Received(1).PublishValueAsync("readonly", "later value", later, null, cancellation.Token);
+    }
 }

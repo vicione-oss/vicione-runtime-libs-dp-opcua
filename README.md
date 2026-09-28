@@ -67,11 +67,17 @@ property off a data point whose envelope is meant to be received.
 ### A cycle that carries only children
 
 The engine sends a channel only in the cycle its value changes in, so a cycle may bring a status
-code or a timestamp with no value beside it. Both ports remember it and serve it with every later
-value of its parent. The client writes nothing at all in that cycle, because OPC UA writes a status
-and a timestamp only together with a value. The server applies a status code to the variable
-straight away, because the variable is already holding the value it belongs to; a source timestamp
-waits for the next value.
+code or a timestamp with no value beside it. The client writes nothing at all in that cycle,
+because OPC UA writes a status and a timestamp only together with a value. The server applies a
+status code to the variable straight away, because the variable is already holding the value it
+belongs to.
+
+A status code is a state that holds until it changes, so both ports remember it and serve it with
+every later value of its parent. A source timestamp belongs to the one value it arrives with and is
+not remembered: the engine does not send a timestamp again that did not change, so carrying it over
+would stamp a later value with the time of an earlier one. A value that arrives without a source
+timestamp in its cycle falls back to the default below, and a timestamp that arrives without its
+value is dropped.
 
 ### What a child carries when there is nothing to carry
 
@@ -83,7 +89,7 @@ on the server a write without a timestamp is stamped with the moment it arrived.
 
 ### Defaults an outbound link overwrites
 
-| Linked outbound  | Default when nothing is linked                                             |
+| Linked outbound  | Default when nothing arrives                                               |
 |------------------|----------------------------------------------------------------------------|
 | Status code      | `Good` (client); `BadWaitingForInitialData` until the first value and for a value that is not a number, `Good` otherwise (server) |
 | Source timestamp | the timestamp the engine gave the value (server), unset so that the receiving server stamps it (client) |

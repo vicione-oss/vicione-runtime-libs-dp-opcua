@@ -763,6 +763,27 @@ public class OpcUaClientDataPortOutgoing_SendAsync
         written.Should().ContainSingle()
             .Which.SourceTimestamp.Should().Be(DateTime.MinValue);
     }
+
+    /// <summary>
+    /// A source timestamp belongs to the value it arrives with. The engine does not send a
+    /// timestamp again that did not change, so carrying it over would stamp a later value with
+    /// the time of an earlier one.
+    /// </summary>
+    [Fact]
+    public async Task Writes_a_value_of_a_later_cycle_without_a_source_timestamp_Async()
+    {
+        var (port, written, cancellation) = OutgoingClientSetup.CreatePortWithEnvelopeChildren();
+        using var tokenSource = cancellation;
+        var produced = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+
+        await port.ConnectAsync(cancellation.Token);
+        await port.SendAsync(0, [OutgoingClientSetup.Value("sent", produced), OutgoingClientSetup.Value("value", 23.5),], cancellation.Token);
+        written.Clear();
+        await port.SendAsync(1, [OutgoingClientSetup.Value("value", 24.0),], cancellation.Token);
+
+        written.Should().ContainSingle()
+            .Which.SourceTimestamp.Should().Be(DateTime.MinValue);
+    }
 }
 
 public class OpcUaClientDataPortOutgoing_DisconnectAsync
