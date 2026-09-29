@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
 using Opc.Ua;
@@ -441,4 +442,37 @@ public sealed class OpcUaClient_DescribeEnvelope
     public void Describes_both_when_a_value_is_written_with_both()
         => OpcUaClient.DescribeEnvelope(new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, SourceTimestamp = s_sourceTimestamp })
             .Should().Be("the status code 'BadCommunicationError' and the source timestamp '2026-03-04T05:06:07.0000000Z'");
+}
+
+[Collection(OpcUaTestEnvironment.Name)]
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaClient_TakeOverReconnectedSessionAsync(OpcUaTestSystem opcUa)
+{
+    [Fact]
+    public async Task Uses_the_reconnected_session_from_then_on_Async()
+    {
+        using OpcUaClient client = new(opcUa.Communication, NullLogger<IOpcUaClient>.Instance);
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+        var reconnected = Substitute.For<ISession>();
+
+        await client.TakeOverReconnectedSessionAsync(reconnected);
+        await client.DisconnectAsync(TestContext.Current.CancellationToken);
+
+        await reconnected.Received(1).CloseAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Disposes_a_session_reconnected_after_the_client_was_disposed_Async()
+    {
+        FakeLogger<IOpcUaClient> logger = new();
+        OpcUaClient client = new(opcUa.Communication, logger);
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+        client.Dispose();
+        var reconnected = Substitute.For<ISession>();
+
+        await client.TakeOverReconnectedSessionAsync(reconnected);
+
+        reconnected.Received(1).Dispose();
+        logger.Collector.GetSnapshot().Should().NotContain(record => record.Message.Contains("cannot take over the session", StringComparison.Ordinal));
+    }
 }
