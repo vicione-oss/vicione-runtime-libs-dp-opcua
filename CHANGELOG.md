@@ -16,6 +16,8 @@
 - Limit the OPC UA client browse to the `MaxDepth` of `64` levels declared for the DataPort node tree; a server nesting deeper now fails the data port connect with an error naming the node and the path down to it
 - Rename the company to `ViciOne open automation gmbh` in the package metadata, the license and the `Author` of the `.yaml` files
 - Require `ViciOne.Tree.Builder` `3.0.0` and cluster management `3.0.0`
+- **Breaking:** Rename the connection node Id `OPCUA-Client` to `OpcUaClientInstance` and `OPCUA-Server` to `OpcUaServerInstance`; existing configurations that use the old Id are not migrated
+- Write the property display names of both `.yaml` files in sentence case, name the unit of the publishing intervals, and replace the MQTT-derived folder description and the descriptions that only repeated a property name with real help texts
 - **Breaking:** Replace the `Status` node property of the OPC UA server with the `Status code` envelope child of a data point; a configuration that linked the property has to link the child instead
 - **Breaking:** Serve an OPC UA server data point read-only unless its configuration clears `Read only`, which now defaults to set; a data point that is meant to take client writes has to clear it
 - **Breaking:** Implement `IExternalOutgoingCommunication` directly in `OpcUaServerDataPortOutgoing` instead of deriving from `DataPortOutgoingCommunicationWithPropertyHandling`; `SendAsync` takes the values of a cycle in one collection, and the overload with separate process and property values is gone

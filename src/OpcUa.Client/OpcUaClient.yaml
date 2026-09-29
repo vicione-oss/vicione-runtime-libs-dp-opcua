@@ -1,8 +1,8 @@
 Common:
   Target       : DataPort                                                                          # required: Id String to identify the target of the file
   ContentType  : Rules                                                                             # required: Id String to identify the content of the file
-  Version      : 0.33.0                                                                            # required: Version of the file
-  Date         : 2026-09-23                                                                        # required: Date of the file
+  Version      : 0.34.0                                                                            # required: Version of the file
+  Date         : 2026-09-28                                                                        # required: Date of the file
   Description  : "OPC-UA Client DataPort"                                                          # required: Description of the file
   Author       : "ViciOne open automation gmbh"                                                    # required: Author of the file
   MetadataType : YAML                                                                              # required: Metadata type of the file (YAML, JSON, XML, Text, Binary, ...)
@@ -14,18 +14,18 @@ Root:
   Description              : "Client DataPort for OPC-UA"                                          # required: display description of the DataPort
   Icon                     : opcua-client                                                          # required: just one Icon for the DataPort
   ChildNodes               :
-    - Id                   : OPCUA-Client
+    - Id                   : OpcUaClientInstance
       MaxDepth             : 64
       MaxInstances         : 8
 
 Nodes:
 
-  # -------------------- OPCUA-Client ------------------------------------
+  # -------------------- OpcUaClientInstance -----------------------------
 
-  - Id                     : OPCUA-Client
+  - Id                     : OpcUaClientInstance
     Type                   : DataPortNode
     Name                   : "Client"
-    Description            : "Client"
+    Description            : "Connection to one OPC UA server"
     MetadataLength         : 0
     Icon                   : client
     TransferDirections     : [ Outbound, Inbound ]
@@ -76,7 +76,7 @@ Nodes:
     MappingId              : Folder
     Type                   : DataPortTreeNode
     Name                   : "Folder"
-    Description            : "Folder in the OPC-UA Topic Tree"
+    Description            : "Folder that matches an object or folder node of the same name in the address space of the OPC UA server"
     Icon                   : folder
     TransferModes          : [ None ]
     NameValidations        :
@@ -264,7 +264,7 @@ PropertyCategories:
 
 Properties:
   - Id          : ApplicationName
-    Name        : "Application Name"
+    Name        : "Application name"
     Description : "The name of the application"
     DataType    : String
     UiControl   : TextBox
@@ -279,7 +279,7 @@ Properties:
 
   - Id          : Server
     Name        : "Server"
-    Description : "The server of the OPC-UA server"
+    Description : "Host name or IP address of the OPC UA server to connect to"
     DataType    : String
     UiControl   : TextBox
     DefaultValue: "localhost"
@@ -301,7 +301,7 @@ Properties:
     DefaultValue: "ua/dataport"
 
   - Id                 : UserAuthenticationType
-    Name               : "User Authentication Type"
+    Name               : "User authentication type"
     Description        : "The type of user authentication."
     DataType           : UInt8
     UiControl          : NumericListBox
@@ -315,25 +315,25 @@ Properties:
 
   - Id          : User
     Name        : "User"
-    Description : "The user"
+    Description : "User name the connection authenticates with when the user authentication type is 'Basic'"
     DataType    : String
     UiControl   : TextBox
 
   - Id          : Password
     Name        : "Password"
-    Description : "The password"
+    Description : "Password of the user when the user authentication type is 'Basic'"
     DataType    : String
     UiControl   : PasswordBox
 
   - Id          : ApplicationCertificateSubject
-    Name        : "Application Certificate Subject"
+    Name        : "Application certificate subject"
     Description : "The subject of the application certificate."
     DataType    : String
     UiControl   : TextBox
     DefaultValue: "CN=OPC-UA Client"
 
   - Id          : ApplicationCertificatesStoreType
-    Name        : "Application Certificates - Store Type"
+    Name        : "Application certificates - store type"
     Description : "The type of the certificate store."
     DataType    : UInt8
     UiControl   : NumericListBox
@@ -345,14 +345,14 @@ Properties:
                     2: 'Directory' }
 
   - Id          : ApplicationCertificatesStorePath
-    Name        : "Application Certificates - Store Path"
+    Name        : "Application certificates - store path"
     Description : "The path to the certificate store or the name in case of a 'X509 Store'."
     DataType    : String
     UiControl   : TextBox
     DefaultValue: "CurrentUser\\My"
 
   - Id          : TrustedCertificatesStoreType
-    Name        : "Trusted Certificates - Store Type"
+    Name        : "Trusted certificates - store type"
     Description : "The type of the certificate store."
     DataType    : UInt8
     UiControl   : NumericListBox
@@ -364,13 +364,13 @@ Properties:
                     2: 'Directory' }
 
   - Id          : TrustedCertificatesStorePath
-    Name        : "Trusted Certificates - Store Path"
+    Name        : "Trusted certificates - store path"
     Description : "The path to the certificate store or the name in case of a 'X509 Store'."
     DataType    : String
     UiControl   : TextBox
 
   - Id          : TrustedIssuerCertificatesStoreType
-    Name        : "Trusted Issuer Certificates - Store Type"
+    Name        : "Trusted issuer certificates - store type"
     Description : "The type of the certificate store."
     DataType    : UInt8
     UiControl   : NumericListBox
@@ -382,13 +382,13 @@ Properties:
                     2: 'Directory' }
 
   - Id          : TrustedIssuerCertificatesStorePath
-    Name        : "Trusted Issuer Certificates - Store Path"
+    Name        : "Trusted issuer certificates - store path"
     Description : "The path to the certificate store or the name in case of a 'X509 Store'."
     DataType    : String
     UiControl   : TextBox
 
   - Id          : SubscriptionPublishingInterval
-    Name        : "Subscription Publishing Interval"
+    Name        : "Subscription publishing interval (ms)"
     Description : "The requested interval (in milliseconds) at which the OPC UA server sends publish responses containing notification data to the client. Lower values increase data freshness but generate more network traffic and server load."
     DataType    : Int32
     UiControl   : NumericUpDown
@@ -397,8 +397,8 @@ Properties:
     MaxValue    : 60000
 
   - Id          : AutoAcceptUntrustedCertificates
-    Name        : "Auto Accept Untrusted Certificates"
-    Description : "Auto accept untrusted certificates."
+    Name        : "Auto accept untrusted certificates"
+    Description : "Accepts a server certificate that is not in the trusted certificate store. Use it for tests only, because it trusts any server."
     DataType    : Bool
     UiControl   : CheckBox
     DefaultValue: false

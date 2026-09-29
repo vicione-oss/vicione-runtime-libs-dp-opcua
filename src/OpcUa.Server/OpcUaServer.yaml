@@ -1,7 +1,7 @@
 Common:
   Target       : DataPort                                                                          # required: Id String to identify the target of the file
   ContentType  : Rules                                                                             # required: Id String to identify the content of the file
-  Version      : 0.34.0                                                                            # required: Version of the file
+  Version      : 0.35.0                                                                            # required: Version of the file
   Date         : 2026-09-28                                                                        # required: Date of the file
   Description  : "OPC-UA Server DataPort"                                                          # required: Description of the file
   Author       : "ViciOne open automation gmbh"                                                    # required: Author of the file
@@ -14,18 +14,18 @@ Root:
   Description              : "Server DataPort for OPC-UA"                                          # required: display description of the DataPort
   Icon                     : opcua-server                                                          # required: just one Icon for the DataPort
   ChildNodes               :
-    - Id                   : OPCUA-Server
+    - Id                   : OpcUaServerInstance
       MaxDepth             : 64
       MaxInstances         : 8
 
 Nodes:
 
-  # -------------------- OPCUA-Server ------------------------------------
+  # -------------------- OpcUaServerInstance -----------------------------
 
-  - Id                     : OPCUA-Server
+  - Id                     : OpcUaServerInstance
     Type                   : DataPortNode
     Name                   : "Server"
-    Description            : "Server"
+    Description            : "OPC UA server that exposes its folders and data points to clients"
     MetadataLength         : 0
     Icon                   : server
     TransferDirections     : [ Outbound, Inbound ]
@@ -82,7 +82,7 @@ Nodes:
     MappingId              : Folder
     Type                   : DataPortTreeNode
     Name                   : "Folder"
-    Description            : "Folder in the OPC-UA Topic Tree"
+    Description            : "Folder that the server exposes as a folder node in its OPC UA address space"
     Icon                   : folder
     TransferModes          : [ None ]
     NameValidations        :
@@ -275,7 +275,7 @@ PropertyCategories:
 
 Properties:
   - Id          : ApplicationName
-    Name        : "Application Name"
+    Name        : "Application name"
     Description : "The name of the application"
     DataType    : String
     UiControl   : TextBox
@@ -297,7 +297,7 @@ Properties:
 
   - Id          : Server
     Name        : "Server"
-    Description : "The server of the OPC-UA server"
+    Description : "Host name or IP address the OPC UA server listens on; 0.0.0.0 listens on all network interfaces"
     DataType    : String
     UiControl   : TextBox
     DefaultValue: "0.0.0.0"
@@ -319,7 +319,7 @@ Properties:
     DefaultValue: "ua/dataport"
 
   - Id                 : UserAuthenticationType
-    Name               : "User Authentication Type"
+    Name               : "User authentication type"
     Description        : "The type of user authentication. 'Anonymous' lets any client open a session without identifying itself."
     DataType           : UInt8
     UiControl          : NumericListBox
@@ -333,25 +333,25 @@ Properties:
 
   - Id          : User
     Name        : "User"
-    Description : "The user"
+    Description : "User name a client has to present to open a session when the user authentication type is 'Basic'"
     DataType    : String
     UiControl   : TextBox
 
   - Id          : Password
     Name        : "Password"
-    Description : "The password"
+    Description : "Password a client has to present together with the user name when the user authentication type is 'Basic'"
     DataType    : String
     UiControl   : PasswordBox
 
   - Id          : ApplicationCertificateSubject
-    Name        : "Application Certificate Subject"
+    Name        : "Application certificate subject"
     Description : "The subject of the application certificate."
     DataType    : String
     UiControl   : TextBox
     DefaultValue: "CN=OPC-UA Server, DC=localhost"
 
   - Id          : ApplicationCertificatesStoreType
-    Name        : "Application Certificates - Store Type"
+    Name        : "Application certificates - store type"
     Description : "The type of the certificate store."
     DataType    : UInt8
     UiControl   : NumericListBox
@@ -363,14 +363,14 @@ Properties:
                     2: 'Directory' }
 
   - Id          : ApplicationCertificatesStorePath
-    Name        : "Application Certificates - Store Path"
+    Name        : "Application certificates - store path"
     Description : "The path to the certificate store or the name in case of a 'X509 Store'."
     DataType    : String
     UiControl   : TextBox
     DefaultValue: "CurrentUser\\My"
 
   - Id          : TrustedCertificatesStoreType
-    Name        : "Trusted Certificates - Store Type"
+    Name        : "Trusted certificates - store type"
     Description : "The type of the certificate store."
     DataType    : UInt8
     UiControl   : NumericListBox
@@ -382,13 +382,13 @@ Properties:
                     2: 'Directory' }
 
   - Id          : TrustedCertificatesStorePath
-    Name        : "Trusted Certificates - Store Path"
+    Name        : "Trusted certificates - store path"
     Description : "The path to the certificate store or the name in case of a 'X509 Store'."
     DataType    : String
     UiControl   : TextBox
 
   - Id          : TrustedIssuerCertificatesStoreType
-    Name        : "Trusted Issuer Certificates - Store Type"
+    Name        : "Trusted issuer certificates - store type"
     Description : "The type of the certificate store."
     DataType    : UInt8
     UiControl   : NumericListBox
@@ -400,27 +400,27 @@ Properties:
                     2: 'Directory' }
 
   - Id          : TrustedIssuerCertificatesStorePath
-    Name        : "Trusted Issuer Certificates - Store Path"
+    Name        : "Trusted issuer certificates - store path"
     Description : "The path to the certificate store or the name in case of a 'X509 Store'."
     DataType    : String
     UiControl   : TextBox
 
   - Id          : AutoAcceptUntrustedCertificates
-    Name        : "Auto Accept Untrusted Certificates"
-    Description : "Auto accept untrusted certificates."
+    Name        : "Auto accept untrusted certificates"
+    Description : "Accepts a client certificate that is not in the trusted certificate store. Use it for tests only, because it trusts any client."
     DataType    : Bool
     UiControl   : CheckBox
     DefaultValue: false
 
   - Id          : TransportQuotas
-    Name        : "Transport Quotas"
+    Name        : "Transport quotas"
     Description : "Enable custom transport quotas to harden against denial-of-service attacks."
     DataType    : Bool
     UiControl   : CheckBox
     DefaultValue: true
 
   - Id          : MinPublishingInterval
-    Name        : "Min Publishing Interval"
+    Name        : "Min publishing interval (ms)"
     Description : "The minimum publishing interval (in milliseconds) the server will accept from a client subscription request. If a client requests a lower interval, the server clamps it to this value. Lower values allow more responsive subscriptions but increase CPU and network utilization."
     DataType    : Int32
     UiControl   : NumericUpDown
@@ -429,7 +429,7 @@ Properties:
     MaxValue    : 60000
 
   - Id          : MaxPublishingInterval
-    Name        : "Max Publishing Interval"
+    Name        : "Max publishing interval (ms)"
     Description : "The maximum publishing interval (in milliseconds) the server will accept from a client subscription request. If a client requests a higher interval, the server clamps it to this value. Higher values reduce server load but increase data latency."
     DataType    : Int32
     UiControl   : NumericUpDown
@@ -438,7 +438,7 @@ Properties:
     MaxValue    : 3600000
 
   - Id                 : SecurityPolicy
-    Name               : "Security Policy"
+    Name               : "Security policy"
     Description        : "The security policy applied to OPC-UA connections. 'None' disables encryption and signing (insecure, test/debug only)."
     DataType           : UInt8
     UiControl          : NumericListBox

@@ -38,7 +38,7 @@ public class YamlTests
     {
         var metadata = RulesDeserializer.Deserialize("OpcUaClient.yaml");
 
-        var clientNode = metadata.Root!.ChildNodes!.Single(child => child.Id == "OPCUA-Client");
+        var clientNode = metadata.Root!.ChildNodes!.Single(child => child.Id == "OpcUaClientInstance");
 
         clientNode.MaxDepth.Should().Be(OpcUaClient.MaxDepth);
     }
