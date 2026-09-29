@@ -114,7 +114,7 @@ public class OpcUaServerDataPortOutgoing_
         var communication = OutgoingServerSetup.CreateCommunication();
 
         var server = Substitute.For<IOpcUaServer, IDisposable>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortOutgoing dataPortOutgoing = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
 
         await dataPortOutgoing.DisposeAsync();

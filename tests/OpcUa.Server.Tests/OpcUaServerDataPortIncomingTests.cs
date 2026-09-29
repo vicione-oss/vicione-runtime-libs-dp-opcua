@@ -38,7 +38,7 @@ public class OpcUaServerDataPortIncoming_
         var communication = CreateCommunication();
 
         var server = Substitute.For<IOpcUaServer, IDisposable>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
 
         await dataPortIncoming.DisposeAsync();
@@ -112,7 +112,7 @@ public class OpcUaServerDataPortIncoming_
         var server = Substitute.For<IOpcUaServer, IDisposable>();
         server.StopAsync(Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("Shutdown failed.")));
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         FakeLogger<IOpcUaServer> logger = new();
         OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, logger);
 

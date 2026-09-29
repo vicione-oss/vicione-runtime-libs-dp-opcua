@@ -7,11 +7,11 @@ using Opc.Ua;
 
 namespace ViciOne.Suite.DataPort;
 
-internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, IDisposable
+internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, IAsyncDisposable
 {
     private readonly Dictionary<OpcUaServerDataPortCommunication, ServerInstance> _servers = new(new OpcUaServerDataPortCommunicationEqualityComparer());
     private readonly Func<OpcUaServerDataPortCommunication, ILogger<IOpcUaServer>, IOpcUaServer> _createServer;
-    // Never disposed: a stop or release that passed the disposed check before Dispose ran still
+    // Never disposed: a stop or release that passed the disposed check before DisposeAsync ran still
     // waits on it, and finds nothing left to do once it gets in.
 #pragma warning disable CA2213 // Verwerfbare Felder verwerfen
     private readonly SemaphoreSlim _semaphore = new(1, 1);
@@ -35,6 +35,8 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        // Called from the data port constructors, so it cannot await. Registering itself only builds
+        // the server and adds nodes; a start or stop in progress still holds the caller up.
         _semaphore.Wait();
 
         try
@@ -161,20 +163,18 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         if (_disposed)
             return;
 
         _disposed = true;
-        _semaphore.Wait();
+        await _semaphore.WaitAsync().ConfigureAwait(false);
 
         try
         {
             foreach (var (communication, entry) in _servers)
-                // Task.Run keeps the shutdown off the caller's synchronization context, which
-                // would otherwise deadlock against the blocking wait.
-                Task.Run(() => ShutDownAsync(communication, entry, CancellationToken.None)).GetAwaiter().GetResult();
+                await ShutDownAsync(communication, entry, CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {

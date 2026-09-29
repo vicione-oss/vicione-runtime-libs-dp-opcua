@@ -34,7 +34,7 @@ public class OpcUaServerInstanceManager_
     [Fact]
     public async Task Creates_new_server()
     {
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer>());
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer>());
         using CancellationTokenSource cancellation = new();
 
         OpcUaServerDataPortCommunication communication = new();
@@ -55,7 +55,7 @@ public class OpcUaServerInstanceManager_
         var communication1 = CreateCommunication();
         var communication2 = CreateCommunication();
 
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer>());
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer>());
         using CancellationTokenSource cancellation = new();
 
         var instanceHandle1 = new object();
@@ -73,7 +73,7 @@ public class OpcUaServerInstanceManager_
     }
 
     [Fact]
-    public void Shares_instance_and_respects_nodes()
+    public async Task Shares_instance_and_respects_nodes()
     {
         List<Node> nodes1 = [];
         List<Node> nodes2 = [];
@@ -82,7 +82,7 @@ public class OpcUaServerInstanceManager_
 
         var server = Substitute.For<IOpcUaServer>();
         var createdServer = false;
-        using OpcUaServerInstanceManager instanceManager = new((_, _) =>
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) =>
         {
             if (createdServer)
                 throw new InvalidOperationException("Server should only be created once.");
@@ -105,7 +105,7 @@ public class OpcUaServerInstanceManager_
         var communication1 = CreateCommunication();
         var communication2 = CreateCommunication(properties => properties.User = "admin1");
 
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer>());
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer>());
         var instanceHandle = new object();
         using CancellationTokenSource cancellation = new();
 
@@ -127,7 +127,7 @@ public class OpcUaServerInstanceManager_
     {
         var communication = CreateCommunication();
 
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer, IDisposable>());
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer, IDisposable>());
         var instanceHandle = new object();
         using CancellationTokenSource cancellation = new();
 
@@ -151,7 +151,7 @@ public class OpcUaServerInstanceManager_
             properties.User = "admin1";
         });
 
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer, IDisposable>());
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaServer, IDisposable>());
         var instanceHandle = new object();
         using CancellationTokenSource cancellation = new();
 
@@ -176,7 +176,7 @@ public class OpcUaServerInstanceManager_
     }
 }
 
-public class OpcUaServerInstanceManager_Dispose
+public class OpcUaServerInstanceManager_DisposeAsync
 {
     [Fact]
     public async Task Stops_a_running_server_before_disposing_it_Async()
@@ -188,7 +188,7 @@ public class OpcUaServerInstanceManager_Dispose
 
         instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
         await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
 
         Received.InOrder(async () =>
         {
@@ -205,7 +205,7 @@ public class OpcUaServerInstanceManager_Dispose
         OpcUaServerDataPortCommunication communication = new();
 
         instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
 
         await server.DidNotReceiveWithAnyArgs().StopAsync(TestContext.Current.CancellationToken);
         ((IDisposable)server).Received(1).Dispose();
@@ -229,7 +229,7 @@ public class OpcUaServerInstanceManager_Dispose
         await instanceManager.StartOpcUaServer(failingCommunication, instanceHandle, TestContext.Current.CancellationToken);
         await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
 
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
 
         ((IDisposable)failingServer).Received(1).Dispose();
         ((IDisposable)server).Received(1).Dispose();
@@ -237,7 +237,7 @@ public class OpcUaServerInstanceManager_Dispose
     }
 
     [Fact]
-    public void Disposes_every_server_when_one_of_them_cannot_be_disposed()
+    public async Task Disposes_every_server_when_one_of_them_cannot_be_disposed_Async()
     {
         FakeLogger<IOpcUaServer> logger = new();
         var failingServer = Substitute.For<IOpcUaServer, IDisposable>();
@@ -251,7 +251,7 @@ public class OpcUaServerInstanceManager_Dispose
         instanceManager.GetOrRegisterOpcUaServer(failingCommunication, new(), logger);
         instanceManager.GetOrRegisterOpcUaServer(communication, new(), logger);
 
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
 
         ((IDisposable)failingServer).Received(1).Dispose();
         ((IDisposable)server).Received(1).Dispose();
@@ -259,15 +259,15 @@ public class OpcUaServerInstanceManager_Dispose
     }
 
     [Fact]
-    public void Disposes_every_server_once_when_disposed_twice()
+    public async Task Disposes_every_server_once_when_disposed_twice_Async()
     {
         var server = Substitute.For<IOpcUaServer, IDisposable>();
         OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
 
         instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
-        instanceManager.Dispose();
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
+        await instanceManager.DisposeAsync();
 
         ((IDisposable)server).Received(1).Dispose();
     }
@@ -284,7 +284,7 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
         var instanceHandle = new object();
 
         instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
         await instanceManager.ReleaseOpcUaServerAsync(communication, instanceHandle, TestContext.Current.CancellationToken);
 
         ((IDisposable)server).Received(1).Dispose();
@@ -294,7 +294,7 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
     public async Task Stops_a_running_server_before_disposing_it_Async()
     {
         var server = Substitute.For<IOpcUaServer, IDisposable>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
         var instanceHandle = new object();
 
@@ -313,7 +313,7 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
     public async Task Does_not_stop_a_server_that_was_never_started_Async()
     {
         var server = Substitute.For<IOpcUaServer, IDisposable>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
         var instanceHandle = new object();
 
@@ -328,7 +328,7 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
     public async Task Stops_the_server_when_the_last_started_data_port_is_released_Async()
     {
         var server = Substitute.For<IOpcUaServer, IDisposable>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
         var startedInstance = new object();
         var idleInstance = new object();
@@ -345,7 +345,7 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
     public async Task Keeps_the_server_running_while_another_started_data_port_remains_Async()
     {
         var server = Substitute.For<IOpcUaServer, IDisposable>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
         var releasedInstance = new object();
         var remainingInstance = new object();
@@ -366,7 +366,7 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
         var server = Substitute.For<IOpcUaServer, IDisposable>();
         server.StopAsync(Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("Shutdown failed.")));
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
         var instanceHandle = new object();
 
@@ -387,13 +387,13 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
 public class OpcUaServerInstanceManager_GetOrRegisterOpcUaServer
 {
     [Fact]
-    public void Refuses_a_data_port_after_the_manager_was_disposed()
+    public async Task Refuses_a_data_port_after_the_manager_was_disposed_Async()
     {
         var server = Substitute.For<IOpcUaServer, IDisposable>();
         OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
 
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
 
         var register = () => instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
 
@@ -405,7 +405,7 @@ public class OpcUaServerInstanceManager_GetOrRegisterOpcUaServer
     public async Task Names_the_started_server_a_further_data_port_cannot_register_with_Async()
     {
         var server = Substitute.For<IOpcUaServer>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
 
         var instanceHandle = new object();
@@ -423,7 +423,7 @@ public class OpcUaServerInstanceManager_GetOrRegisterOpcUaServer
     public async Task Refuses_a_further_data_port_after_the_server_was_started_and_stopped_Async()
     {
         var server = Substitute.For<IOpcUaServer>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
         var instanceHandle = new object();
 
@@ -444,7 +444,7 @@ public class OpcUaServerInstanceManager_StartOpcUaServer
     public async Task Fails_when_the_server_is_not_registered_Async()
     {
         var server = Substitute.For<IOpcUaServer>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
 
         await instanceManager.Awaiting(manager => manager.StartOpcUaServer(communication, new(), TestContext.Current.CancellationToken))
@@ -460,7 +460,7 @@ public class OpcUaServerInstanceManager_StartOpcUaServer
         var server = Substitute.For<IOpcUaServer>();
         server.StartAsync(Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("Server did not initialize correctly.")), _ => Task.CompletedTask);
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
 
         var instanceHandle = new object();
@@ -479,7 +479,7 @@ public class OpcUaServerInstanceManager_StartOpcUaServer
         var server = Substitute.For<IOpcUaServer>();
         server.StartAsync(Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("Server did not initialize correctly.")));
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
         var instanceHandle = new object();
 
@@ -497,7 +497,7 @@ public class OpcUaServerInstanceManager_StartOpcUaServer
         var server = Substitute.For<IOpcUaServer>();
         server.StartAsync(Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("Server did not initialize correctly.")), _ => Task.CompletedTask);
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
         var failedInstance = new object();
         var startedInstance = new object();
@@ -519,7 +519,7 @@ public class OpcUaServerInstanceManager_StopOpcUaServer
     public async Task Starts_the_server_after_more_stops_than_starts_Async()
     {
         var server = Substitute.For<IOpcUaServer>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
 
         var instanceHandle = new object();
@@ -539,7 +539,7 @@ public class OpcUaServerInstanceManager_StopOpcUaServer
         var server = Substitute.For<IOpcUaServer>();
         server.StopAsync(Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("Shutdown failed.")));
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
         var instanceHandle = new object();
 
@@ -558,7 +558,7 @@ public class OpcUaServerInstanceManager_StopOpcUaServer
         var server = Substitute.For<IOpcUaServer>();
         server.StopAsync(Arg.Any<CancellationToken>())
             .Returns(_ => Task.FromException(new InvalidOperationException("Shutdown failed.")), _ => Task.CompletedTask);
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new();
         var instanceHandle = new object();
 
@@ -576,7 +576,7 @@ public class OpcUaServerInstanceManager_StopOpcUaServer
     {
         FakeLogger<IOpcUaServer> logger = new();
         var server = Substitute.For<IOpcUaServer>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
         var instanceHandle = new object();
 
@@ -593,7 +593,7 @@ public class OpcUaServerInstanceManager_StopOpcUaServer
     {
         FakeLogger<IOpcUaServer> logger = new();
         var server = Substitute.For<IOpcUaServer>();
-        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
         var startedInstance = new object();
         var idleInstance = new object();
