@@ -106,7 +106,7 @@ public class OpcUaClientInstanceManager_
     {
         var communication = CreateCommunication();
 
-        var failingClient = Substitute.For<IOpcUaClient, IDisposable>();
+        var failingClient = Substitute.For<IOpcUaClient, IAsyncDisposable>();
         failingClient.ConnectAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Connect failed."));
 
         await using OpcUaClientInstanceManager instanceManager = new((_, _) => failingClient);
@@ -115,7 +115,7 @@ public class OpcUaClientInstanceManager_
         await instanceManager.Awaiting(x => x.GetOrRegisterOpcUaClientAsync(communication, new(), _logger, cancellation.Token))
             .Should().ThrowAsync<InvalidOperationException>();
 
-        ((IDisposable)failingClient).Received(1).Dispose();
+        await ((IAsyncDisposable)failingClient).Received(1).DisposeAsync();
     }
 
     [Fact]
@@ -137,9 +137,9 @@ public class OpcUaClientInstanceManager_
     [Fact]
     public async Task Disposes_every_client_when_one_fails_to_disconnect_Async()
     {
-        var failingClient = Substitute.For<IOpcUaClient, IDisposable>();
+        var failingClient = Substitute.For<IOpcUaClient, IAsyncDisposable>();
         failingClient.DisconnectAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Disconnect failed."));
-        var workingClient = Substitute.For<IOpcUaClient, IDisposable>();
+        var workingClient = Substitute.For<IOpcUaClient, IAsyncDisposable>();
         var clients = new Queue<IOpcUaClient>([failingClient, workingClient,]);
         OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
 
@@ -149,8 +149,8 @@ public class OpcUaClientInstanceManager_
         var dispose = instanceManager.DisposeAsync().AsTask();
 
         await dispose.Awaiting(d => d).Should().ThrowAsync<InvalidOperationException>();
-        ((IDisposable)failingClient).Received(1).Dispose();
-        ((IDisposable)workingClient).Received(1).Dispose();
+        await ((IAsyncDisposable)failingClient).Received(1).DisposeAsync();
+        await ((IAsyncDisposable)workingClient).Received(1).DisposeAsync();
     }
 
     [Fact]
@@ -278,7 +278,7 @@ public class OpcUaClientInstanceManager_DisposeAsync
     [Fact]
     public async Task Disposes_every_client_once_when_disposed_twice_Async()
     {
-        var client = Substitute.For<IOpcUaClient, IDisposable>();
+        var client = Substitute.For<IOpcUaClient, IAsyncDisposable>();
         OpcUaClientInstanceManager instanceManager = new((_, _) => client);
         OpcUaClientDataPortCommunication communication = new();
 
@@ -286,7 +286,7 @@ public class OpcUaClientInstanceManager_DisposeAsync
         await instanceManager.DisposeAsync();
         await instanceManager.DisposeAsync();
 
-        ((IDisposable)client).Received(1).Dispose();
+        await ((IAsyncDisposable)client).Received(1).DisposeAsync();
     }
 }
 
@@ -297,7 +297,7 @@ public class OpcUaClientInstanceManager_GetOrRegisterOpcUaClientAsync
     [Fact]
     public async Task Refuses_a_data_port_after_the_manager_was_disposed_Async()
     {
-        var client = Substitute.For<IOpcUaClient, IDisposable>();
+        var client = Substitute.For<IOpcUaClient, IAsyncDisposable>();
         OpcUaClientInstanceManager instanceManager = new((_, _) => client);
         OpcUaClientDataPortCommunication communication = new();
 
@@ -316,7 +316,7 @@ public class OpcUaClientInstanceManager_ReleaseOpcUaClientAsync
     [Fact]
     public async Task Ignores_a_release_after_the_manager_was_disposed_Async()
     {
-        var client = Substitute.For<IOpcUaClient, IDisposable>();
+        var client = Substitute.For<IOpcUaClient, IAsyncDisposable>();
         OpcUaClientInstanceManager instanceManager = new((_, _) => client);
         OpcUaClientDataPortCommunication communication = new();
         var instanceHandle = new object();
@@ -325,6 +325,6 @@ public class OpcUaClientInstanceManager_ReleaseOpcUaClientAsync
         await instanceManager.DisposeAsync();
         await instanceManager.ReleaseOpcUaClientAsync(communication, instanceHandle, TestContext.Current.CancellationToken);
 
-        ((IDisposable)client).Received(1).Dispose();
+        await ((IAsyncDisposable)client).Received(1).DisposeAsync();
     }
 }

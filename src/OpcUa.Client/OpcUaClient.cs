@@ -10,7 +10,7 @@ using Opc.Ua.Client;
 
 namespace ViciOne.Suite.DataPort;
 
-internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication, ILogger<IOpcUaClient>? logger = null) : IOpcUaClient, IDisposable
+internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication, ILogger<IOpcUaClient>? logger = null) : IOpcUaClient, IAsyncDisposable
 {
     private const int SessionTimeout = 15_000;
     private const int KeepAliveInterval = 5_000;
@@ -21,12 +21,11 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
 
     private readonly OpcUaClientDataPortProperties _properties = new(communication);
     private readonly ILogger<IOpcUaClient>? _logger = logger;
-    // Never disposed: a reconnect take-over may still be waiting for it after Dispose.
-#pragma warning disable CA2213 // Verwerfbare Felder verwerfen
     private readonly SemaphoreSlim _sessionSemaphore = new(1, 1);
-#pragma warning restore CA2213 // Verwerfbare Felder verwerfen
+    private readonly Lock _takeOverGate = new();
 
-    private volatile bool _disposed;
+    private bool _disposed;
+    private Task _pendingTakeOvers = Task.CompletedTask;
     private ISession? _session;
     private SessionReconnectHandler? _reconnectHandler;
 #pragma warning disable CA2213 // Verwerfbare Felder verwerfen
@@ -81,40 +80,34 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
         var reconnected = (sender as SessionReconnectHandler)?.Session;
 
         if (reconnected is not null)
-            _ = Task.Run(() => TakeOverReconnectedSessionAsync(reconnected));
+            StartTakeOver(reconnected);
+    }
+
+    internal void StartTakeOver(ISession reconnected)
+    {
+        lock (_takeOverGate)
+        {
+            if (!_disposed)
+            {
+                _pendingTakeOvers = Task.WhenAll(_pendingTakeOvers, Task.Run(() => TakeOverReconnectedSessionAsync(reconnected)));
+                return;
+            }
+        }
+
+        // The reconnect finished after DisposeAsync closed the gate, so nothing will ever take
+        // this session over.
+        reconnected.Dispose();
     }
 
     internal async Task TakeOverReconnectedSessionAsync(ISession reconnected)
     {
-        List<ISession> retired = [];
+        ISession? retired = null;
 
         await _sessionSemaphore.WaitAsync().ConfigureAwait(false);
 
         try
         {
-            if (_session is not null && reconnected != _session)
-            {
-                retired.Add(_session);
-                _session = reconnected;
-
-                var newSubscription = _session.Subscriptions.FirstOrDefault();
-
-                if (newSubscription is not null && _subscription != newSubscription)
-                {
-                    _subscription = newSubscription;
-                    _logger?.LogSubscriptionExchanged(_properties.ApplicationName);
-                }
-            }
-
-            // Dispose does not wait for this lock, so it may have run at any point before here and
-            // missed the reconnected session.
-            if (_disposed)
-            {
-                retired.Add(reconnected);
-
-                if (_session == reconnected)
-                    _session = null;
-            }
+            retired = ExchangeSession(reconnected);
         }
         catch (Exception ex)
         {
@@ -125,8 +118,41 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
             _sessionSemaphore.Release();
         }
 
-        foreach (var session in retired)
-            session.Dispose();
+        try
+        {
+            retired?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogReconnectTakeOverFailure(_properties.ApplicationName, ex);
+        }
+    }
+
+    /// <summary>
+    /// Makes <paramref name="reconnected"/> the current session and returns the session that is no
+    /// longer needed: the replaced one, or <paramref name="reconnected"/> itself when the client was
+    /// disconnected while the reconnect was running.
+    /// </summary>
+    private ISession? ExchangeSession(ISession reconnected)
+    {
+        if (_session is null)
+            return reconnected;
+
+        if (reconnected == _session)
+            return null;
+
+        var retired = _session;
+        _session = reconnected;
+
+        var newSubscription = _session.Subscriptions.FirstOrDefault();
+
+        if (newSubscription is not null && _subscription != newSubscription)
+        {
+            _subscription = newSubscription;
+            _logger?.LogSubscriptionExchanged(_properties.ApplicationName);
+        }
+
+        return retired;
     }
 
     public async Task DisconnectAsync(CancellationToken cancellationToken)
@@ -409,18 +435,39 @@ internal sealed class OpcUaClient(OpcUaClientDataPortCommunication communication
         return session;
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        _disposed = true;
+        Task pendingTakeOvers;
 
-        if (_session is not null)
+        lock (_takeOverGate)
         {
-            _session.KeepAlive -= OnKeepAlive;
-            _session.Dispose();
-            _session = null;
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            pendingTakeOvers = _pendingTakeOvers;
         }
 
-        _reconnectHandler?.Dispose();
-        _reconnectHandler = null;
+        await pendingTakeOvers.ConfigureAwait(false);
+        await _sessionSemaphore.WaitAsync().ConfigureAwait(false);
+
+        try
+        {
+            if (_session is not null)
+            {
+                _session.KeepAlive -= OnKeepAlive;
+                _session.Dispose();
+                _session = null;
+            }
+
+            _reconnectHandler?.Dispose();
+            _reconnectHandler = null;
+        }
+        finally
+        {
+            _sessionSemaphore.Release();
+        }
+
+        _sessionSemaphore.Dispose();
     }
 }

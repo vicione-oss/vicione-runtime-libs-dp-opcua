@@ -78,7 +78,8 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
         }
         catch
         {
-            (client as IDisposable)?.Dispose();
+            if (client is IAsyncDisposable disposable)
+                await disposable.DisposeAsync().ConfigureAwait(false);
             throw;
         }
 
@@ -172,7 +173,8 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
         }
         finally
         {
-            (client as IDisposable)?.Dispose();
+            if (client is IAsyncDisposable disposable)
+                await disposable.DisposeAsync().ConfigureAwait(false);
         }
     }
 }
