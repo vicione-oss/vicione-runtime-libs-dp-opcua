@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
 using Opc.Ua;
@@ -26,7 +27,7 @@ public sealed class OpcUaClient_OnKeepAlive(OpcUaTestSystem opcUa)
     public async Task Does_not_log_a_keep_alive_failure_after_a_disconnect_Async()
     {
         FakeLogger<IOpcUaClient> logger = new();
-        using OpcUaClient client = new(opcUa.Communication, logger);
+        await using OpcUaClient client = new(opcUa.Communication, logger);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
         await client.DisconnectAsync(TestContext.Current.CancellationToken);
@@ -44,7 +45,7 @@ public sealed class OpcUaClient_OnKeepAlive(OpcUaTestSystem opcUa)
     public async Task Does_not_log_a_keep_alive_failure_after_repeated_connect_and_disconnect_cycles_Async()
     {
         FakeLogger<IOpcUaClient> logger = new();
-        using OpcUaClient client = new(opcUa.Communication, logger);
+        await using OpcUaClient client = new(opcUa.Communication, logger);
 
         for (var cycle = 0; cycle < 3; cycle++)
         {
@@ -64,7 +65,7 @@ public sealed class OpcUaClient_OnKeepAlive(OpcUaTestSystem opcUa)
         OpcUaClient client = new(opcUa.Communication, logger);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
-        client.Dispose();
+        await client.DisposeAsync();
 
         client.OnKeepAlive(Substitute.For<ISession>(), BadKeepAlive());
 
@@ -78,7 +79,7 @@ public sealed class OpcUaClient_OnKeepAlive(OpcUaTestSystem opcUa)
     public async Task Hands_a_bad_keep_alive_to_a_usable_handler_while_connected_Async()
     {
         FakeLogger<IOpcUaClient> logger = new();
-        using OpcUaClient client = new(opcUa.Communication, logger);
+        await using OpcUaClient client = new(opcUa.Communication, logger);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
 
@@ -114,7 +115,7 @@ public sealed class OpcUaClient_BrowseNodesAsync
     public async Task Returns_every_child_of_a_folder_the_server_answers_in_pages_Async()
     {
         await using var opcUa = await OpcUaTestSystem.StartAsync(options => options.OversizedFolder = true);
-        using OpcUaClient client = new(opcUa.Communication);
+        await using OpcUaClient client = new(opcUa.Communication);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
 
@@ -136,7 +137,7 @@ public sealed class OpcUaClient_BrowseNodesAsync
     public async Task Returns_the_nodes_of_an_address_space_nested_to_the_maximum_depth_Async()
     {
         await using var opcUa = await OpcUaTestSystem.StartAsync(options => options.DeepFolderChainDepth = OpcUaClient.MaxDepth);
-        using OpcUaClient client = new(opcUa.Communication);
+        await using OpcUaClient client = new(opcUa.Communication);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
 
@@ -156,7 +157,7 @@ public sealed class OpcUaClient_BrowseNodesAsync
     public async Task Fails_naming_the_path_when_the_address_space_is_nested_past_the_maximum_depth_Async()
     {
         await using var opcUa = await OpcUaTestSystem.StartAsync(options => options.DeepFolderChainDepth = OpcUaClient.MaxDepth + 1);
-        using OpcUaClient client = new(opcUa.Communication);
+        await using OpcUaClient client = new(opcUa.Communication);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
 
@@ -180,7 +181,7 @@ public sealed class OpcUaClient_BrowseNodesAsync
     {
         await using var opcUa = await OpcUaTestSystem.StartAsync(options => options.CyclicReferences = true);
         FakeLogger<IOpcUaClient> logger = new();
-        using OpcUaClient client = new(opcUa.Communication, logger);
+        await using OpcUaClient client = new(opcUa.Communication, logger);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
 
@@ -220,7 +221,7 @@ public sealed class OpcUaClient_BrowseAddressSpaceAsync
     public async Task Stops_at_a_node_that_is_already_on_the_current_path_Async()
     {
         FakeLogger<IOpcUaClient> logger = new();
-        using var client = CreateClient(logger);
+        await using var client = CreateClient(logger);
         var session = SessionBrowsing(new()
         {
             [ObjectIds.ObjectsFolder] = ["First",],
@@ -244,7 +245,7 @@ public sealed class OpcUaClient_BrowseAddressSpaceAsync
     [Fact]
     public async Task Returns_a_chain_nested_to_the_maximum_depth_Async()
     {
-        using var client = CreateClient();
+        await using var client = CreateClient();
         var session = SessionBrowsing(Chain(OpcUaClient.MaxDepth));
 
         var nodes = await client.BrowseAddressSpaceAsync(session, TestContext.Current.CancellationToken);
@@ -269,7 +270,7 @@ public sealed class OpcUaClient_BrowseAddressSpaceAsync
         }
         finally
         {
-            client.Dispose();
+            await client.DisposeAsync();
         }
     }
 
@@ -288,7 +289,7 @@ public sealed class OpcUaClient_BrowseAddressSpaceAsync
         }
         finally
         {
-            client.Dispose();
+            await client.DisposeAsync();
         }
     }
 
@@ -354,7 +355,7 @@ public sealed class OpcUaClient_SubscribeAsync(OpcUaTestSystem opcUa)
     [Fact]
     public async Task Reports_both_timestamps_a_server_sends_with_a_value_Async()
     {
-        using OpcUaClient client = new(opcUa.Communication);
+        await using OpcUaClient client = new(opcUa.Communication);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
 
@@ -396,7 +397,7 @@ public sealed class OpcUaClient_WriteValuesAsync(OpcUaTestSystem opcUa)
     [Fact]
     public async Task Writes_nothing_without_asking_the_server_Async()
     {
-        using OpcUaClient client = new(opcUa.Communication);
+        await using OpcUaClient client = new(opcUa.Communication);
 
         await client.ConnectAsync(TestContext.Current.CancellationToken);
 
@@ -441,4 +442,92 @@ public sealed class OpcUaClient_DescribeEnvelope
     public void Describes_both_when_a_value_is_written_with_both()
         => OpcUaClient.DescribeEnvelope(new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, SourceTimestamp = s_sourceTimestamp })
             .Should().Be("the status code 'BadCommunicationError' and the source timestamp '2026-03-04T05:06:07.0000000Z'");
+}
+
+[Collection(OpcUaTestEnvironment.Name)]
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaClient_TakeOverReconnectedSessionAsync(OpcUaTestSystem opcUa)
+{
+    [Fact]
+    public async Task Uses_the_reconnected_session_from_then_on_Async()
+    {
+        await using OpcUaClient client = new(opcUa.Communication, NullLogger<IOpcUaClient>.Instance);
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+        var reconnected = Substitute.For<ISession>();
+
+        await client.TakeOverReconnectedSessionAsync(reconnected);
+        await client.DisconnectAsync(TestContext.Current.CancellationToken);
+
+        await reconnected.Received(1).CloseAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Disposes_a_session_reconnected_after_the_client_was_disposed_Async()
+    {
+        OpcUaClient client = new(opcUa.Communication, NullLogger<IOpcUaClient>.Instance);
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+        await client.DisposeAsync();
+        var reconnected = Substitute.For<ISession>();
+
+        client.StartTakeOver(reconnected);
+
+        reconnected.Received(1).Dispose();
+    }
+
+    [Fact]
+    public async Task Disposes_only_after_a_pending_take_over_finished_Async()
+    {
+        OpcUaClient client = new(opcUa.Communication, NullLogger<IOpcUaClient>.Instance);
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+        using ManualResetEventSlim takingOver = new();
+        using ManualResetEventSlim finishTakeOver = new();
+        var reconnected = Substitute.For<ISession>();
+        reconnected.Subscriptions.Returns(_ =>
+        {
+            takingOver.Set();
+            finishTakeOver.Wait(TimeSpan.FromSeconds(10));
+            return (IEnumerable<Subscription>)[];
+        });
+
+        client.StartTakeOver(reconnected);
+        takingOver.Wait(TestContext.Current.CancellationToken);
+        var dispose = client.DisposeAsync().AsTask();
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+        var disposedBeforeTakeOverFinished = dispose.IsCompleted;
+        finishTakeOver.Set();
+        await dispose;
+
+        disposedBeforeTakeOverFinished.Should().BeFalse();
+        reconnected.Received(1).Dispose();
+    }
+
+    [Fact]
+    public async Task Disposes_a_session_reconnected_after_the_client_disconnected_Async()
+    {
+        await using OpcUaClient client = new(opcUa.Communication, NullLogger<IOpcUaClient>.Instance);
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+        await client.DisconnectAsync(TestContext.Current.CancellationToken);
+        var reconnected = Substitute.For<ISession>();
+
+        await client.TakeOverReconnectedSessionAsync(reconnected);
+
+        reconnected.Received(1).Dispose();
+    }
+
+    [Fact]
+    public async Task Disposes_after_a_retired_session_failed_to_dispose_Async()
+    {
+        FakeLogger<IOpcUaClient> logger = new();
+        OpcUaClient client = new(opcUa.Communication, logger);
+        await client.ConnectAsync(TestContext.Current.CancellationToken);
+        await client.DisconnectAsync(TestContext.Current.CancellationToken);
+        var reconnected = Substitute.For<ISession>();
+        reconnected.When(session => session.Dispose()).Throw(new InvalidOperationException("Dispose failed."));
+
+        client.StartTakeOver(reconnected);
+
+        await client.DisposeAsync();
+
+        logger.Collector.GetSnapshot().Should().ContainSingle(record => record.Message.Contains("cannot take over", StringComparison.Ordinal));
+    }
 }

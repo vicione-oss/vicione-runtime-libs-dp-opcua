@@ -9,7 +9,7 @@ public sealed class OpcUaClientConnectionTester : IDataPortConnectionTester<OpcU
     {
         try
         {
-            using var opcUaClient = new OpcUaClient(communication, null);
+            await using var opcUaClient = new OpcUaClient(communication, null);
 
             await opcUaClient.ConnectAsync(default).ConfigureAwait(false);
             await opcUaClient.DisconnectAsync(default).ConfigureAwait(false);
