@@ -48,4 +48,13 @@ internal static partial class OpcUaServerDataPortLog
 
     [LoggerMessage(13, LogLevel.Warning, "Anonymous access rejected for session '{SessionId}'. The server authenticates its users.")]
     internal static partial void LogAnonymousAccessRejected(this ILogger logger, string sessionId);
+
+    [LoggerMessage(14, LogLevel.Debug, "Ignoring the stop of the OPC UA server at '{Server}:{Port}' because it is not running.")]
+    internal static partial void LogStopWithoutStart(this ILogger logger, string server, int port);
+
+    [LoggerMessage(15, LogLevel.Error, "Cannot shut the OPC UA server at '{Server}:{Port}' down. Clients may still be connected.")]
+    internal static partial void LogServerShutdownFailed(this ILogger logger, string server, int port, Exception exception);
+
+    [LoggerMessage(16, LogLevel.Warning, "Ignoring the stop of the OPC UA server at '{Server}:{Port}' by a data port that is not one of those keeping it running. The data ports that started it are still using the server.")]
+    internal static partial void LogStopByDataPortThatIsNotKeepingItRunning(this ILogger logger, string server, int port);
 }

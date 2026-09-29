@@ -24,6 +24,7 @@
 - Serve an OPC UA variable with the status code and the source timestamp linked to the envelope children of its data point, a linked status code as it is even for a value that is not a number, and forward the ones a client writes on the same channels; writable data points now advertise `StatusWrite` and `TimestampWrite`
 - Forward the status code, the source timestamp and the server timestamp an OPC UA server sends with a subscribed value on the channels of the envelope children of its data point instead of dropping them, and write a value with the status code and the source timestamp linked to those children instead of the `Good` and the unset timestamp every written value defaulted to
 - **Breaking:** Refuse an anonymous OPC UA client session on a server that is not configured for anonymous authentication, instead of granting it whatever the server advertises; `User Authentication Type` now defaults to `Basic`, and a server set to `Basic` without a user and a password refuses to start rather than accepting every client unchecked
+- Name the server in the error an OPC UA server data port fails with when it is created for an already started server, and state that every data port using that server has to be disposed first; it used to read `Node manager is already initialized`
 
 ### Fixed
 
@@ -42,6 +43,14 @@
 - Fix OPC UA server letting an exception escape into the OPC UA stack when a client writes to a data point it holds no configuration for; the write is now refused with `BadInternalError`
 - Fix OPC UA server logging an account lockout on every failed login, which filled the security audit trail with lockouts that never happened
 - **Breaking:** Fix OPC UA client reporting the time a notification was published as the timestamp of the value it carried, which moved every value to the moment the server batched it rather than the moment it was produced; the source timestamp is now used, falling back to the server timestamp and then to the publish time when a server sends neither, so the values of a device whose clock is off now move with that clock
+- Fix OPC UA server data ports reporting a successful connect while the server was not listening, which happened once an engine teardown had stopped more data ports than it had started; a stop now only counts for a data port that started the server, and any other stop is ignored and logged
+- Fix OPC UA server data ports reporting a successful connect after their server was already released; the connect now fails
+- Fix OPC UA server incoming data ports failing their disconnect with `Node manager is not initialized` when the connect before it never succeeded, which made the engine teardown fail instead of releasing the port
+- Fix OPC UA server incoming data ports subscribing to the shared server once per connect, so a port the engine connected twice reported every value twice and went on reporting values after it was disconnected
+- Fix OPC UA server being disposed without being stopped, which dropped the sessions of connected clients instead of shutting them down in order; a server that refuses to stop or dispose is now reported and no longer keeps the remaining servers from being shut down
+- Fix OPC UA server staying started after the data port that started it was removed, which kept it listening until the whole engine shut down; it is now stopped as soon as the last data port that started it is released
+- Fix OPC UA server data ports failing to shut down when the shared server refused to stop, which broke the engine teardown and left no way to create a data port for that server again; the failure is now reported and the data port shuts down
+- Fix OPC UA client and server shutting down with `Cannot access a disposed object` when their shared client or server was already shut down; shutting down twice, and releasing a data port afterwards, are now both accepted
 
 ## 0.32.0 - 2026-05-11
 

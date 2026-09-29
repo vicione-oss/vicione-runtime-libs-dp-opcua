@@ -11,7 +11,12 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
 {
     private readonly Dictionary<OpcUaClientDataPortCommunication, (IOpcUaClient Client, List<object> Instances)> _clients = new(new OpcUaClientDataPortCommunicationEqualityComparer());
     private readonly Func<OpcUaClientDataPortCommunication, ILogger<IOpcUaClient>, IOpcUaClient> _createClient;
+    // Never disposed: a stop or release that passed the disposed check before Dispose ran still
+    // waits on it, and finds nothing left to do once it gets in.
+#pragma warning disable CA2213 // Verwerfbare Felder verwerfen
     private readonly SemaphoreSlim _semaphore = new(1, 1);
+#pragma warning restore CA2213 // Verwerfbare Felder verwerfen
+    private bool _disposed;
 
     public static readonly OpcUaClientInstanceManager Instance = new();
 
@@ -28,6 +33,8 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
 
     public async Task<IOpcUaClient> GetOrRegisterOpcUaClientAsync(OpcUaClientDataPortCommunication communication, object instance, ILogger<IOpcUaClient> logger, CancellationToken cancellationToken)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -62,6 +69,9 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
 
     public async Task ReleaseOpcUaClientAsync(OpcUaClientDataPortCommunication communication, object instance, CancellationToken cancellationToken)
     {
+        if (_disposed)
+            return;
+
         await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -86,6 +96,10 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        _disposed = true;
         _semaphore.Wait();
 
         try
@@ -97,14 +111,11 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
                 Task.Run(() => client.DisconnectAsync(CancellationToken.None)).GetAwaiter().GetResult();
                 (client as IDisposable)?.Dispose();
             }
-
-            _clients.Clear();
         }
         finally
         {
+            _clients.Clear();
             _semaphore.Release();
         }
-
-        _semaphore.Dispose();
     }
 }

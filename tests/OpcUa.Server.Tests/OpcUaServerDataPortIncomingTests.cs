@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ViciOne.ManagedEngine.ExternalCommunication;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
 using ViciOne.ManagedEngine.Runtime;
 using Xunit;
@@ -32,6 +33,23 @@ public class OpcUaServerDataPortIncoming_
     }
 
     [Fact]
+    public async Task Fails_the_connect_after_the_server_was_released_Async()
+    {
+        var communication = CreateCommunication();
+
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+
+        await dataPortIncoming.DisposeAsync();
+
+        await dataPortIncoming.Awaiting(port => port.ConnectAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await dataPortIncoming.Awaiting(port => port.DisconnectAsync(TestContext.Current.CancellationToken))
+            .Should().NotThrowAsync();
+    }
+
+    [Fact]
     public async Task DependencyInjectionProviderFactory_can_create_instance_Async()
     {
         await using var providerFactory = new ConstructorProviderFactory();
@@ -46,6 +64,63 @@ public class OpcUaServerDataPortIncoming_
             AssemblyLoadContext.Default);
 
         _ = instance.Should().NotBeNull().And.BeOfType<OpcUaServerDataPortIncoming>();
+    }
+
+    [Fact]
+    public async Task Stops_the_server_when_disconnecting_after_a_failed_connect_Async()
+    {
+        var communication = CreateCommunication();
+
+        var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
+        var server = Substitute.For<IOpcUaServer>();
+        var logger = Substitute.For<ILogger<IOpcUaServer>>();
+        server.When(s => s.ReceiveValue -= Arg.Any<Action<ReceivedWrite>>())
+            .Do(_ => throw new InvalidOperationException("Node manager is not initialized."));
+        instanceManager.GetOrRegisterOpcUaServer(Arg.Any<OpcUaServerDataPortCommunication>(), Arg.Any<object>(), Arg.Any<ILogger<IOpcUaServer>>()).Returns(server);
+        await using OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, logger);
+
+        await dataPortIncoming.DisconnectAsync(TestContext.Current.CancellationToken);
+
+        await instanceManager.Received(1).StopOpcUaServer(communication, dataPortIncoming, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Stops_receiving_values_after_a_disconnect_that_followed_two_connects_Async()
+    {
+        var communication = CreateCommunication();
+
+        var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
+        var server = Substitute.For<IOpcUaServer>();
+        instanceManager.GetOrRegisterOpcUaServer(Arg.Any<OpcUaServerDataPortCommunication>(), Arg.Any<object>(), Arg.Any<ILogger<IOpcUaServer>>()).Returns(server);
+        await using OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+        var deliveries = 0;
+        dataPortIncoming.Received += _ => deliveries++;
+
+        await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
+        await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
+        await dataPortIncoming.DisconnectAsync(TestContext.Current.CancellationToken);
+        server.ReceiveValue += Raise.Event<Action<ReceivedWrite>>(new ReceivedWrite("channel", "value", new DateTime(2026, 8, 21), Opc.Ua.StatusCodes.Good, new DateTime(2026, 8, 21)));
+
+        deliveries.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Disposes_when_the_server_cannot_be_stopped_Async()
+    {
+        var communication = CreateCommunication();
+
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        server.StopAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromException(new InvalidOperationException("Shutdown failed.")));
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        FakeLogger<IOpcUaServer> logger = new();
+        OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, logger);
+
+        await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
+        await dataPortIncoming.DisposeAsync();
+
+        ((IDisposable)server).Received(1).Dispose();
+        logger.LatestRecord.Message.Should().Match("*Cannot shut the OPC UA server*");
     }
 
     [Fact]
@@ -125,8 +200,8 @@ public class OpcUaServerDataPortIncoming_
         Received.InOrder(async () =>
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportIncoming, logger);
-            await instanceManager.StartOpcUaServer(communication, cancellation.Token);
-            await instanceManager.StopOpcUaServer(communication, cancellation.Token);
+            await instanceManager.StartOpcUaServer(communication, dataportIncoming, cancellation.Token);
+            await instanceManager.StopOpcUaServer(communication, dataportIncoming, cancellation.Token);
             await instanceManager.ReleaseOpcUaServerAsync(communication, dataportIncoming, default);
         });
     }

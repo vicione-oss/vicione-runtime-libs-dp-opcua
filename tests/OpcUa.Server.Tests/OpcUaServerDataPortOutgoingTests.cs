@@ -109,6 +109,21 @@ internal static class OutgoingServerSetup
 public class OpcUaServerDataPortOutgoing_
 {
     [Fact]
+    public async Task Fails_the_connect_after_the_server_was_released_Async()
+    {
+        var communication = OutgoingServerSetup.CreateCommunication();
+
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortOutgoing dataPortOutgoing = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+
+        await dataPortOutgoing.DisposeAsync();
+
+        await dataPortOutgoing.Awaiting(port => port.ConnectAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
     public async Task DependencyInjectionProviderFactory_can_create_instance_Async()
     {
         await using var providerFactory = new ConstructorProviderFactory();
@@ -162,8 +177,8 @@ public class OpcUaServerDataPortOutgoing_
         Received.InOrder(async () =>
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportOutgoing, logger);
-            await instanceManager.StartOpcUaServer(communication, cancellation.Token);
-            await instanceManager.StopOpcUaServer(communication, cancellation.Token);
+            await instanceManager.StartOpcUaServer(communication, dataportOutgoing, cancellation.Token);
+            await instanceManager.StopOpcUaServer(communication, dataportOutgoing, cancellation.Token);
             await instanceManager.ReleaseOpcUaServerAsync(communication, dataportOutgoing, Arg.Any<CancellationToken>());
         });
     }
@@ -215,7 +230,7 @@ public class OpcUaServerDataPortOutgoing_
         Received.InOrder(async () =>
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportOutgoing, logger);
-            await instanceManager.StartOpcUaServer(communication, cancellation.Token);
+            await instanceManager.StartOpcUaServer(communication, dataportOutgoing, cancellation.Token);
             await server.PublishValueAsync("readonly", "value", new DateTime(2023, 11, 20), null, cancellation.Token);
         });
     }
