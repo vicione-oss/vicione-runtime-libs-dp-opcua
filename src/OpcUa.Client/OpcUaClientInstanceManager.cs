@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -7,11 +8,12 @@ using Opc.Ua;
 
 namespace ViciOne.Suite.DataPort;
 
-internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, IDisposable
+internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, IAsyncDisposable
 {
     private readonly Dictionary<OpcUaClientDataPortCommunication, (IOpcUaClient Client, List<object> Instances)> _clients = new(new OpcUaClientDataPortCommunicationEqualityComparer());
+    private readonly Dictionary<OpcUaClientDataPortCommunication, Task> _closing = new(new OpcUaClientDataPortCommunicationEqualityComparer());
     private readonly Func<OpcUaClientDataPortCommunication, ILogger<IOpcUaClient>, IOpcUaClient> _createClient;
-    // Never disposed: a stop or release that passed the disposed check before Dispose ran still
+    // Never disposed: a stop or release that passed the disposed check before DisposeAsync ran still
     // waits on it, and finds nothing left to do once it gets in.
 #pragma warning disable CA2213 // Verwerfbare Felder verwerfen
     private readonly SemaphoreSlim _semaphore = new(1, 1);
@@ -35,36 +37,54 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-        try
+        while (true)
         {
-            if (_clients.TryGetValue(communication, out var clientTuple))
-            {
-                clientTuple.Instances.Add(instance);
-                return clientTuple.Client;
-            }
+            Task? closing;
 
-            var client = _createClient(communication, logger);
+            await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
-                await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+                if (!_closing.TryGetValue(communication, out closing) || closing.IsCompleted)
+                {
+                    _closing.Remove(communication);
+                    return await RegisterAsync(communication, instance, logger, cancellationToken).ConfigureAwait(false);
+                }
             }
-            catch
+            finally
             {
-                (client as IDisposable)?.Dispose();
-                throw;
+                _semaphore.Release();
             }
 
-            _clients.Add(communication, (client, [instance,]));
+            // A released client for the same endpoint is still closing outside the lock; a new one
+            // connects only after it is gone.
+            await closing.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
 
-            return client;
-        }
-        finally
+    private async Task<IOpcUaClient> RegisterAsync(OpcUaClientDataPortCommunication communication, object instance, ILogger<IOpcUaClient> logger, CancellationToken cancellationToken)
+    {
+        if (_clients.TryGetValue(communication, out var clientTuple))
         {
-            _semaphore.Release();
+            clientTuple.Instances.Add(instance);
+            return clientTuple.Client;
         }
+
+        var client = _createClient(communication, logger);
+
+        try
+        {
+            await client.ConnectAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            (client as IDisposable)?.Dispose();
+            throw;
+        }
+
+        _clients.Add(communication, (client, [instance,]));
+
+        return client;
     }
 
     public async Task ReleaseOpcUaClientAsync(OpcUaClientDataPortCommunication communication, object instance, CancellationToken cancellationToken)
@@ -72,50 +92,87 @@ internal sealed class OpcUaClientInstanceManager : IOpcUaClientInstanceManager, 
         if (_disposed)
             return;
 
+        TaskCompletionSource closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        IOpcUaClient? released;
+
         await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            if (_clients.TryGetValue(communication, out var clientTuple))
-            {
-                clientTuple.Instances.Remove(instance);
-
-                if (clientTuple.Instances.Count == 0)
-                {
-                    await clientTuple.Client.DisconnectAsync(cancellationToken).ConfigureAwait(false);
-                    (clientTuple.Client as IDisposable)?.Dispose();
-                    _clients.Remove(communication);
-                }
-            }
+            released = Unregister(communication, instance, closed.Task);
         }
         finally
         {
             _semaphore.Release();
         }
+
+        if (released is null)
+            return;
+
+        try
+        {
+            await CloseAsync(released, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            closed.SetResult();
+        }
     }
 
-    public void Dispose()
+    /// <summary>
+    /// Removes <paramref name="instance"/> from the client for <paramref name="communication"/> and
+    /// returns that client once no instance uses it any more, marking it as closing until
+    /// <paramref name="closed"/> completes.
+    /// </summary>
+    private IOpcUaClient? Unregister(OpcUaClientDataPortCommunication communication, object instance, Task closed)
+    {
+        if (!_clients.TryGetValue(communication, out var clientTuple))
+            return null;
+
+        clientTuple.Instances.Remove(instance);
+
+        if (clientTuple.Instances.Count > 0)
+            return null;
+
+        _clients.Remove(communication);
+        _closing[communication] = closed;
+
+        return clientTuple.Client;
+    }
+
+    public async ValueTask DisposeAsync()
     {
         if (_disposed)
             return;
 
         _disposed = true;
-        _semaphore.Wait();
+        IOpcUaClient[] clients;
+
+        await _semaphore.WaitAsync().ConfigureAwait(false);
 
         try
         {
-            foreach (var (client, _) in _clients.Values)
-            {
-                // Task.Run keeps the close off the caller's synchronization context, which would
-                // otherwise deadlock against the blocking wait.
-                Task.Run(() => client.DisconnectAsync(CancellationToken.None)).GetAwaiter().GetResult();
-                (client as IDisposable)?.Dispose();
-            }
+            clients = [.. _clients.Values.Select(entry => entry.Client),];
         }
         finally
         {
             _clients.Clear();
+            _closing.Clear();
             _semaphore.Release();
+        }
+
+        await Task.WhenAll(clients.Select(client => CloseAsync(client, CancellationToken.None))).ConfigureAwait(false);
+    }
+
+    private static async Task CloseAsync(IOpcUaClient client, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await client.DisconnectAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            (client as IDisposable)?.Dispose();
         }
     }
 }

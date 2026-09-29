@@ -48,7 +48,7 @@ public sealed class OpcUaClient_AbsoluteNodeIds
         ];
 
         var communication = opcUa.Communication with { Nodes = nodes, };
-        using OpcUaClientInstanceManager instanceManager = new();
+        await using OpcUaClientInstanceManager instanceManager = new();
         OpcUaClientDataPortIncoming dataPort = new(communication, NullLogger<IOpcUaClient>.Instance, instanceManager);
 
         try

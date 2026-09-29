@@ -51,6 +51,7 @@
 - Fix OPC UA server staying started after the data port that started it was removed, which kept it listening until the whole engine shut down; it is now stopped as soon as the last data port that started it is released
 - Fix OPC UA server data ports failing to shut down when the shared server refused to stop, which broke the engine teardown and left no way to create a data port for that server again; the failure is now reported and the data port shuts down
 - Fix OPC UA client and server shutting down with `Cannot access a disposed object` when their shared client or server was already shut down; shutting down twice, and releasing a data port afterwards, are now both accepted
+- Fix a slow disconnect of an OPC UA client data port holding up every other OPC UA client data port that connects or disconnects meanwhile
 
 ## 0.32.0 - 2026-05-11
 

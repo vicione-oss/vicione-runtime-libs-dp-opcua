@@ -35,7 +35,7 @@ public class OpcUaClientInstanceManager_
     [Fact]
     public async Task Creates_new_client()
     {
-        using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
         using CancellationTokenSource cancellation = new();
 
         var client = await instanceManager.GetOrRegisterOpcUaClientAsync(new(), new(), _logger, cancellation.Token);
@@ -50,7 +50,7 @@ public class OpcUaClientInstanceManager_
         var communication1 = CreateCommunication();
         var communication2 = CreateCommunication();
 
-        using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
         using CancellationTokenSource cancellation = new();
 
         var client1 = await instanceManager.GetOrRegisterOpcUaClientAsync(communication1, new(), _logger, cancellation.Token);
@@ -66,7 +66,7 @@ public class OpcUaClientInstanceManager_
         var communication1 = CreateCommunication(properties => properties.Endpoint = "opc.tcp://test1");
         var communication2 = CreateCommunication(properties => properties.Endpoint = "opc.tcp://test2");
 
-        using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
         var instanceHandle = new object();
         using CancellationTokenSource cancellation = new();
 
@@ -88,7 +88,7 @@ public class OpcUaClientInstanceManager_
         var workingClient = Substitute.For<IOpcUaClient>();
         var clients = new Queue<IOpcUaClient>([failingClient, workingClient,]);
 
-        using OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
         var instanceHandle = new object();
         using CancellationTokenSource cancellation = new();
 
@@ -109,7 +109,7 @@ public class OpcUaClientInstanceManager_
         var failingClient = Substitute.For<IOpcUaClient, IDisposable>();
         failingClient.ConnectAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Connect failed."));
 
-        using OpcUaClientInstanceManager instanceManager = new((_, _) => failingClient);
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => failingClient);
         using CancellationTokenSource cancellation = new();
 
         await instanceManager.Awaiting(x => x.GetOrRegisterOpcUaClientAsync(communication, new(), _logger, cancellation.Token))
@@ -129,9 +129,28 @@ public class OpcUaClientInstanceManager_
 
         _ = await instanceManager.GetOrRegisterOpcUaClientAsync(communication, new(), _logger, cancellation.Token);
 
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
 
         await client.Received(1).DisconnectAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Disposes_every_client_when_one_fails_to_disconnect_Async()
+    {
+        var failingClient = Substitute.For<IOpcUaClient, IDisposable>();
+        failingClient.DisconnectAsync(Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("Disconnect failed."));
+        var workingClient = Substitute.For<IOpcUaClient, IDisposable>();
+        var clients = new Queue<IOpcUaClient>([failingClient, workingClient,]);
+        OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
+
+        _ = await instanceManager.GetOrRegisterOpcUaClientAsync(CreateCommunication(properties => properties.Endpoint = "opc.tcp://test1"), new(), _logger, TestContext.Current.CancellationToken);
+        _ = await instanceManager.GetOrRegisterOpcUaClientAsync(CreateCommunication(properties => properties.Endpoint = "opc.tcp://test2"), new(), _logger, TestContext.Current.CancellationToken);
+
+        var dispose = instanceManager.DisposeAsync().AsTask();
+
+        await dispose.Awaiting(d => d).Should().ThrowAsync<InvalidOperationException>();
+        ((IDisposable)failingClient).Received(1).Dispose();
+        ((IDisposable)workingClient).Received(1).Dispose();
     }
 
     [Fact]
@@ -139,7 +158,7 @@ public class OpcUaClientInstanceManager_
     {
         var communication = CreateCommunication();
 
-        using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
         var instanceHandle = new object();
         using CancellationTokenSource cancellation = new();
 
@@ -165,7 +184,7 @@ public class OpcUaClientInstanceManager_
         slowClient.DisconnectAsync(Arg.Any<CancellationToken>()).Returns(disconnect.Task);
         var clients = new Queue<IOpcUaClient>([slowClient, Substitute.For<IOpcUaClient>(),]);
 
-        using OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
         var instanceHandle = new object();
 
         _ = await instanceManager.GetOrRegisterOpcUaClientAsync(communication1, instanceHandle, _logger, TestContext.Current.CancellationToken);
@@ -186,6 +205,38 @@ public class OpcUaClientInstanceManager_
     }
 
     [Fact]
+    public async Task Connects_a_client_for_the_same_endpoint_only_after_the_released_one_disconnected_Async()
+    {
+        var communication = CreateCommunication();
+
+        TaskCompletionSource disconnect = new();
+        var slowClient = Substitute.For<IOpcUaClient>();
+        slowClient.DisconnectAsync(Arg.Any<CancellationToken>()).Returns(disconnect.Task);
+        var nextClient = Substitute.For<IOpcUaClient>();
+        var disconnectedBeforeConnect = false;
+        nextClient.ConnectAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            disconnectedBeforeConnect = disconnect.Task.IsCompleted;
+            return Task.CompletedTask;
+        });
+        var clients = new Queue<IOpcUaClient>([slowClient, nextClient,]);
+
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
+        var instanceHandle = new object();
+
+        _ = await instanceManager.GetOrRegisterOpcUaClientAsync(communication, instanceHandle, _logger, TestContext.Current.CancellationToken);
+        var release = instanceManager.ReleaseOpcUaClientAsync(communication, instanceHandle, TestContext.Current.CancellationToken);
+        var register = instanceManager.GetOrRegisterOpcUaClientAsync(communication, instanceHandle, _logger, TestContext.Current.CancellationToken);
+
+        disconnect.SetResult();
+        await release;
+        var client = await register;
+
+        client.Should().BeSameAs(nextClient);
+        disconnectedBeforeConnect.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Only_releases_correct_client()
     {
         var communication1 = CreateCommunication();
@@ -195,7 +246,7 @@ public class OpcUaClientInstanceManager_
             properties.User = "admin1";
         });
 
-        using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
+        await using OpcUaClientInstanceManager instanceManager = new((_, _) => Substitute.For<IOpcUaClient>());
         var instanceHandle = new object();
         using CancellationTokenSource cancellation = new();
 
@@ -220,7 +271,7 @@ public class OpcUaClientInstanceManager_
     }
 }
 
-public class OpcUaClientInstanceManager_Dispose
+public class OpcUaClientInstanceManager_DisposeAsync
 {
     private readonly ILogger<IOpcUaClient> _logger = Substitute.For<ILogger<IOpcUaClient>>();
 
@@ -232,8 +283,8 @@ public class OpcUaClientInstanceManager_Dispose
         OpcUaClientDataPortCommunication communication = new();
 
         _ = await instanceManager.GetOrRegisterOpcUaClientAsync(communication, new(), _logger, TestContext.Current.CancellationToken);
-        instanceManager.Dispose();
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
+        await instanceManager.DisposeAsync();
 
         ((IDisposable)client).Received(1).Dispose();
     }
@@ -250,7 +301,7 @@ public class OpcUaClientInstanceManager_GetOrRegisterOpcUaClientAsync
         OpcUaClientInstanceManager instanceManager = new((_, _) => client);
         OpcUaClientDataPortCommunication communication = new();
 
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
 
         await instanceManager.Awaiting(manager => manager.GetOrRegisterOpcUaClientAsync(communication, new(), _logger, TestContext.Current.CancellationToken))
             .Should().ThrowAsync<ObjectDisposedException>()
@@ -271,7 +322,7 @@ public class OpcUaClientInstanceManager_ReleaseOpcUaClientAsync
         var instanceHandle = new object();
 
         _ = await instanceManager.GetOrRegisterOpcUaClientAsync(communication, instanceHandle, _logger, TestContext.Current.CancellationToken);
-        instanceManager.Dispose();
+        await instanceManager.DisposeAsync();
         await instanceManager.ReleaseOpcUaClientAsync(communication, instanceHandle, TestContext.Current.CancellationToken);
 
         ((IDisposable)client).Received(1).Dispose();
