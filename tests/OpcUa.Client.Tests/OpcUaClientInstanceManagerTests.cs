@@ -155,6 +155,37 @@ public class OpcUaClientInstanceManager_
     }
 
     [Fact]
+    public async Task Registers_other_client_while_a_released_client_is_still_disconnecting_Async()
+    {
+        var communication1 = CreateCommunication(properties => properties.Endpoint = "opc.tcp://test1");
+        var communication2 = CreateCommunication(properties => properties.Endpoint = "opc.tcp://test2");
+
+        TaskCompletionSource disconnect = new();
+        var slowClient = Substitute.For<IOpcUaClient>();
+        slowClient.DisconnectAsync(Arg.Any<CancellationToken>()).Returns(disconnect.Task);
+        var clients = new Queue<IOpcUaClient>([slowClient, Substitute.For<IOpcUaClient>(),]);
+
+        using OpcUaClientInstanceManager instanceManager = new((_, _) => clients.Dequeue());
+        var instanceHandle = new object();
+
+        _ = await instanceManager.GetOrRegisterOpcUaClientAsync(communication1, instanceHandle, _logger, TestContext.Current.CancellationToken);
+        var release = instanceManager.ReleaseOpcUaClientAsync(communication1, instanceHandle, TestContext.Current.CancellationToken);
+
+        var register = instanceManager.GetOrRegisterOpcUaClientAsync(communication2, instanceHandle, _logger, TestContext.Current.CancellationToken);
+
+        try
+        {
+            await register.Awaiting(r => r.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)).Should().NotThrowAsync();
+        }
+        finally
+        {
+            disconnect.SetResult();
+            await release;
+            await register;
+        }
+    }
+
+    [Fact]
     public async Task Only_releases_correct_client()
     {
         var communication1 = CreateCommunication();
