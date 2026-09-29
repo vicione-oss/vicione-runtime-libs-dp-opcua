@@ -22,7 +22,7 @@ public class OpcUaClientDataPortOutgoingBenchmark : IDisposable
     public int DataSize { get; private set; } = 25000;
 
     [GlobalSetup]
-    public void Setup()
+    public async Task Setup()
     {
         List<Node> nodes = [];
 
@@ -125,13 +125,14 @@ public class OpcUaClientDataPortOutgoingBenchmark : IDisposable
         };
         _communication = new OpcUaClientDataPortOutgoing(communication, _loggerFactory);
 
-        _communication.ConnectAsync(CancellationToken.None).Wait();
+        await _communication.ConnectAsync(CancellationToken.None);
     }
 
     [GlobalCleanup]
-    public void Cleanup()
+    public async Task Cleanup()
     {
-        _communication?.DisconnectAsync(CancellationToken.None).Wait();
+        if (_communication is not null)
+            await _communication.DisconnectAsync(CancellationToken.None);
         _communication = null;
         _data.Clear();
     }
