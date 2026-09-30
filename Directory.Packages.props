@@ -14,7 +14,7 @@
     <PackageVersion Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.375.457" />
     <PackageVersion Include="OPCFoundation.NetStandard.Opc.Ua.Server" Version="1.5.375.457" />
     <PackageVersion Include="ViciOne.ManagedEngine" Version="1.0.0" />
-    <PackageVersion Include="ViciOne.Suite.DataPort" Version="0.32.0" />
+    <PackageVersion Include="ViciOne.Suite.DataPort" Version="1.0.0" />
     <PackageVersion Include="ViciOne.Tree.Builder" Version="3.0.0" />
     <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
   </ItemGroup>
