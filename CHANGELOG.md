@@ -25,6 +25,7 @@
 - Forward the status code, the source timestamp and the server timestamp an OPC UA server sends with a subscribed value on the channels of the envelope children of its data point instead of dropping them, and write a value with the status code and the source timestamp linked to those children instead of the `Good` and the unset timestamp every written value defaulted to
 - **Breaking:** Refuse an anonymous OPC UA client session on a server that is not configured for anonymous authentication, instead of granting it whatever the server advertises; `User Authentication Type` now defaults to `Basic`, and a server set to `Basic` without a user and a password refuses to start rather than accepting every client unchecked
 - Name the server in the error an OPC UA server data port fails with when it is created for an already started server, and state that every data port using that server has to be disposed first; it used to read `Node manager is already initialized`
+- Update `ViciOne.Suite.DataPort` to `1.0.0`
 
 ### Fixed
 
