@@ -138,6 +138,36 @@ public class DataPortNodeManager_OnWriteValue
         received.Should().BeEquivalentTo([(Channel, s_writeTimestamp, 3.4d), (SecondChannel, s_writeTimestamp, 3.4d)]);
     }
 
+    public static TheoryData<Type, object> ValuesOfEveryValueType => new()
+    {
+        { typeof(bool), true },
+        { typeof(sbyte), (sbyte)-3 },
+        { typeof(byte), (byte)3 },
+        { typeof(short), (short)-3 },
+        { typeof(ushort), (ushort)3 },
+        { typeof(int), -3 },
+        { typeof(uint), 3u },
+        { typeof(long), -3L },
+        { typeof(ulong), 3UL },
+        { typeof(float), 3.4f },
+        { typeof(double), 3.4d },
+        { typeof(string), "text" },
+        { typeof(DateTime), new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc) },
+        { typeof(byte[]), new byte[] { 1, 2, 3 } },
+    };
+
+    [Theory]
+    [MemberData(nameof(ValuesOfEveryValueType))]
+    public void Accepts_a_write_of_the_value_type_of_the_data_point(Type valueType, object value)
+    {
+        using var manager = CreateNodeManager(valueType);
+        var node = manager.GetNodeState(Channel);
+
+        var result = Write(node, node, value);
+
+        result.StatusCode.Code.Should().Be(StatusCodes.Good);
+    }
+
     [Fact]
     public void Stamps_the_current_time_if_the_write_carries_no_timestamp()
     {
@@ -379,6 +409,44 @@ public class DataPortNodeManager_CreateAddressSpace
     }
 
     /// <summary>
+    /// A client checks every write against the data type a variable advertises, so a variable must
+    /// advertise the built-in type its values are served as.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(bool), DataTypes.Boolean)]
+    [InlineData(typeof(sbyte), DataTypes.SByte)]
+    [InlineData(typeof(byte), DataTypes.Byte)]
+    [InlineData(typeof(short), DataTypes.Int16)]
+    [InlineData(typeof(ushort), DataTypes.UInt16)]
+    [InlineData(typeof(int), DataTypes.Int32)]
+    [InlineData(typeof(uint), DataTypes.UInt32)]
+    [InlineData(typeof(long), DataTypes.Int64)]
+    [InlineData(typeof(ulong), DataTypes.UInt64)]
+    [InlineData(typeof(float), DataTypes.Float)]
+    [InlineData(typeof(double), DataTypes.Double)]
+    [InlineData(typeof(string), DataTypes.String)]
+    [InlineData(typeof(DateTime), DataTypes.DateTime)]
+    [InlineData(typeof(byte[]), DataTypes.ByteString)]
+    public void Advertises_the_data_type_of_the_value_type(Type valueType, uint dataType)
+    {
+        using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel], valueType: valueType);
+
+        manager.GetNodeState(ValueChannel).DataType.Should().Be(new NodeId(dataType));
+    }
+
+    /// <summary>
+    /// A value type without a built-in counterpart is served as any type rather than as a
+    /// <c>DataValue</c>, which no value written by a client ever is.
+    /// </summary>
+    [Fact]
+    public void Advertises_the_base_data_type_for_a_value_type_without_a_built_in_type()
+    {
+        using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel], valueType: typeof(Guid[]));
+
+        manager.GetNodeState(ValueChannel).DataType.Should().Be(DataTypeIds.BaseDataType);
+    }
+
+    /// <summary>
     /// Both ports register their tree with the server, so a child linked both ways arrives with one
     /// channel per direction, and neither may be served as the value of its variable.
     /// </summary>
@@ -447,7 +515,8 @@ public class DataPortNodeManager_CreateAddressSpace
     /// The value of the <c>Read only</c> property, or <c>null</c> for a data point that does not
     /// carry the property at all.
     /// </param>
-    private static DataPortNodeManager CreateNodeManager(string childDesignId, List<string> childChannels, bool? readOnly = false)
+    /// <param name="valueType">The value type of the data point, <see cref="double"/> when omitted.</param>
+    private static DataPortNodeManager CreateNodeManager(string childDesignId, List<string> childChannels, bool? readOnly = false, Type? valueType = null)
     {
         Node folder = new() { Id = Guid.NewGuid(), Name = "folder", DesignId = OpcUaServerNodeDesignId.Folder };
         Node variable = new()
@@ -456,7 +525,7 @@ public class DataPortNodeManager_CreateAddressSpace
             ParentId = folder.Id,
             Name = "variable",
             DesignId = OpcUaServerNodeDesignId.Variable,
-            ValueType = typeof(double),
+            ValueType = valueType ?? typeof(double),
             AffectedChannels = [ValueChannel],
             TransferredChannels = [ValueChannel, .. childChannels],
             Properties = readOnly is { } value
