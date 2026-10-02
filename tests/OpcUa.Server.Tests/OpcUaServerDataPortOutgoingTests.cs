@@ -94,6 +94,45 @@ internal static class OutgoingServerSetup
                 },
             ]);
 
+    internal static OpcUaServerDataPortCommunication CreateCommunicationWithStatusCodeAndSourceTimestampChildren()
+        => CreateCommunication(
+            [
+                new()
+                {
+                    DesignId = OpcUaServerNodeDesignId.Folder,
+                    Name = "parent",
+                    Id = s_folderId,
+                },
+                new()
+                {
+                    DesignId = OpcUaServerNodeDesignId.Variable,
+                    Name = "child",
+                    TransferredChannels = ["readonly", "statusChannel", "sent",],
+                    AffectedChannels = ["readonly",],
+                    Id = s_dataPointId,
+                    ParentId = s_folderId,
+                    ValueType = typeof(int),
+                },
+                new()
+                {
+                    DesignId = OpcUaServerNodeDesignId.StatusCode,
+                    Name = "quality",
+                    AffectedChannels = ["statusChannel",],
+                    Id = Guid.Parse("5f0f1a3e-0b58-4d9b-8f2a-1ec2ef6f1d21"),
+                    ParentId = s_dataPointId,
+                    ValueType = typeof(string),
+                },
+                new()
+                {
+                    DesignId = OpcUaServerNodeDesignId.SourceTimestamp,
+                    Name = "when",
+                    AffectedChannels = ["sent",],
+                    Id = Guid.Parse("6e0d4b81-2c3a-45f7-9d18-4b5a6c7d8e9f"),
+                    ParentId = s_dataPointId,
+                    ValueType = typeof(DateTime),
+                },
+            ]);
+
     internal static (IOpcUaServerInstanceManager InstanceManager, IOpcUaServer Server, ILogger<IOpcUaServer> Logger) SubstituteServer(OpcUaServerDataPortCommunication communication, ILogger<IOpcUaServer>? logger = null)
     {
         var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
@@ -394,6 +433,26 @@ public class OpcUaServerDataPortOutgoing_SendAsync
             ], cancellation.Token);
 
         await server.Received(1).PublishValueAsync("readonly", "value", produced, null, cancellation.Token);
+    }
+
+    [Fact]
+    public async Task Serves_a_value_with_a_bad_status_code_together_with_its_source_timestamp_Async()
+    {
+        var communication = OutgoingServerSetup.CreateCommunicationWithStatusCodeAndSourceTimestampChildren();
+        var (instanceManager, server, logger) = OutgoingServerSetup.SubstituteServer(communication);
+        using CancellationTokenSource cancellation = new();
+        var produced = new DateTime(2026, 3, 4, 6, 4, 0, DateTimeKind.Utc);
+        await using OpcUaServerDataPortOutgoing dataportOutgoing = new(communication, instanceManager, logger);
+
+        await dataportOutgoing.ConnectAsync(cancellation.Token);
+        await dataportOutgoing.SendAsync(0,
+            [
+                new() { Channel = "statusChannel", Timestamp = s_timestamp, Value = "BadSensorFailure", },
+                new() { Channel = "sent", Timestamp = s_timestamp, Value = produced, },
+                new() { Channel = "readonly", Timestamp = s_timestamp, Value = 4, },
+            ], cancellation.Token);
+
+        await server.Received(1).PublishValueAsync("readonly", 4, produced, StatusCodes.BadSensorFailure, cancellation.Token);
     }
 
     /// <summary>
