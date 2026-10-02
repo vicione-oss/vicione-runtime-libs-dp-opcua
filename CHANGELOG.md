@@ -38,7 +38,8 @@
 - Fix OPC UA client reading only the first page of a folder's references while browsing, which made every node configured below a large folder fail to connect as if the server did not have it
 - Fix OPC UA client browsing an address space whose hierarchy contains a cycle until the recursion overflowed the stack, which killed the process and every other data port running in it
 - Fix OPC UA client outgoing data port reporting an unmapped channel as a `KeyNotFoundException` thrown inside the write, once part of the batch had already been submitted; the channel is now named and nothing is written
-- Fix OPC UA client data ports reporting a node that affects no channel as affecting more than one, and a node that affects several as `Sequence contains more than one element`; both errors now name the node and the channels it affects
+- Fix OPC UA client data ports reporting a node that affects several channels as `Sequence contains more than one element`; the error now names the node and the channels it affects
+- Fix an OPC UA client data port linked in both directions failing the engine start, because the data points of the other direction affect no channel of it; they are now skipped
 - Fix OPC UA client outgoing data port reporting two nodes that affect the same channel with a bare `ArgumentException`; the error now names the channel and both nodes
 - Fix OPC UA server turning every client write into an internal error when a data point's configured minimum or maximum was a different number type than the written value, such as a whole number limit on a float data point; the two are now compared as numbers
 - Fix OPC UA server letting an exception escape into the OPC UA stack when a client writes to a data point it holds no configuration for; the write is now refused with `BadInternalError`

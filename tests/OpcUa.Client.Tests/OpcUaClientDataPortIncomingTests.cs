@@ -483,8 +483,12 @@ public class OpcUaClientDataPortIncoming_
         receivedValues.Should().BeFalse();
     }
 
+    /// <summary>
+    /// A data port linked in both directions receives every data point of the other direction too,
+    /// with no channel of its own. The server need not even have a node for it.
+    /// </summary>
     [Fact]
-    public async Task Fails_the_connect_when_a_node_has_no_affected_channel_Async()
+    public async Task Skips_a_node_that_has_no_affected_channel_Async()
     {
         var communication = CreateCommunication(
             [
@@ -492,7 +496,14 @@ public class OpcUaClientDataPortIncoming_
                 {
                     Id = Guid.Parse("81c3bbad-6326-4122-b195-10aab9d75949"),
                     DesignId = OpcUaClientNodeDesignId.Variable,
-                    Name = "test",
+                    Name = "outbound",
+                },
+                new()
+                {
+                    Id = Guid.Parse("6b1e4a2c-3d5f-4e7a-9c8b-0d2f4a6c8e13"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    Name = "inbound",
+                    AffectedChannels = ["channel"],
                 },
             ]);
 
@@ -504,16 +515,18 @@ public class OpcUaClientDataPortIncoming_
         [
             new()
             {
-                DisplayName = "test",
-                NodeId = new("ns=2;s=test"),
+                DisplayName = "inbound",
+                NodeId = new("ns=2;s=inbound"),
             },
         ]);
 
         var opcUaDataport = new OpcUaClientDataPortIncoming(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
 
-        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
-            .ThrowAsync<InvalidOperationException>().WithMessage("*'test'*has no affected channel*");
+        await opcUaDataport.ConnectAsync(cancellation.Token);
+
+        await opcUaClient.Received(1).SubscribeAsync(Arg.Any<Opc.Ua.NodeId>(), Arg.Any<Action<OpcUaValue>>(), cancellation.Token);
+        await opcUaClient.Received(1).SubscribeAsync(new Opc.Ua.NodeId("ns=2;s=inbound"), Arg.Any<Action<OpcUaValue>>(), cancellation.Token);
     }
 
     [Fact]

@@ -512,8 +512,12 @@ public class OpcUaClientDataPortOutgoing_
         await opcUaClient.DidNotReceive().WriteValuesAsync(Arg.Any<IEnumerable<OpcUaWrite>>(), cancellation.Token);
     }
 
+    /// <summary>
+    /// A data port linked in both directions receives every data point of the other direction too,
+    /// with no channel of its own. The server need not even have a node for it.
+    /// </summary>
     [Fact]
-    public async Task Fails_the_connect_when_a_node_has_no_affected_channel_Async()
+    public async Task Skips_a_node_that_has_no_affected_channel_Async()
     {
         var communication = OutgoingClientSetup.CreateCommunication(
             [
@@ -521,7 +525,14 @@ public class OpcUaClientDataPortOutgoing_
                 {
                     Id = Guid.Parse("a7bc6fae-99bc-4a18-9d4b-9ea4630f4a61"),
                     DesignId = OpcUaClientNodeDesignId.Variable,
-                    Name = "test",
+                    Name = "inbound",
+                },
+                new()
+                {
+                    Id = Guid.Parse("c4e8a1f3-5b7d-4f2a-8e6c-1a3b5d7f9e20"),
+                    DesignId = OpcUaClientNodeDesignId.Variable,
+                    Name = "outbound",
+                    AffectedChannels = ["channel"],
                 },
             ]);
 
@@ -533,16 +544,21 @@ public class OpcUaClientDataPortOutgoing_
         [
             new()
             {
-                DisplayName = "test",
-                NodeId = new("ns=2;s=test"),
+                DisplayName = "outbound",
+                NodeId = new("ns=2;s=outbound"),
             },
         ]);
+        List<OpcUaWrite> written = [];
+        opcUaClient.When(c => c.WriteValuesAsync(Arg.Any<IEnumerable<OpcUaWrite>>(), cancellation.Token))
+            .Do(c => written.AddRange((IEnumerable<OpcUaWrite>)c[0]));
 
         var opcUaDataport = new OpcUaClientDataPortOutgoing(communication, logger, instanceManager);
         instanceManager.GetOrRegisterOpcUaClientAsync(communication, opcUaDataport, logger, cancellation.Token).Returns(opcUaClient);
 
-        await opcUaDataport.Awaiting(x => x.ConnectAsync(cancellation.Token)).Should()
-            .ThrowAsync<InvalidOperationException>().WithMessage("*'test'*has no affected channel*");
+        await opcUaDataport.ConnectAsync(cancellation.Token);
+        await opcUaDataport.SendAsync(0, [new() { Channel = "channel", Value = 2, },], cancellation.Token);
+
+        written.Should().ContainSingle().Which.NodeId.Should().Be(new Opc.Ua.NodeId("ns=2;s=outbound"));
     }
 
     [Fact]

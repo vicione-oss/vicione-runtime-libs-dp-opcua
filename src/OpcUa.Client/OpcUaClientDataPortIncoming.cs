@@ -131,6 +131,11 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
                 if (EnvelopeChildren.IsEnvelopeChild(dataPortNode.DesignId) || !resolved.Add(dataPortNode.Id))
                     continue;
 
+                // A data port linked in both directions is handed the data points of the other
+                // direction too, without a channel of their own.
+                if (dataPortNode.AffectedChannels.Count == 0)
+                    continue;
+
                 var channel = GetAffectedChannel(dataPortNode);
 
                 channelNodes.Add((channel, GetOpcUaNode(dataPortNode)));
@@ -146,11 +151,8 @@ public sealed class OpcUaClientDataPortIncoming : IExternalIncomingCommunication
                 ?? throw new InvalidOperationException($"Cannot find node '{dataPortNode.Name}' ({dataPortNode.Id}) in OPC UA server.");
 
         static string GetAffectedChannel(INode dataPortNode)
-            => dataPortNode.AffectedChannels.Count switch
-            {
-                1 => dataPortNode.AffectedChannels[0],
-                0 => throw new InvalidOperationException($"Node '{dataPortNode.Name}' ({dataPortNode.Id}) has no affected channel."),
-                _ => throw new InvalidOperationException($"Node '{dataPortNode.Name}' ({dataPortNode.Id}) has more than one affected channel: '{string.Join("', '", dataPortNode.AffectedChannels)}'.")
-            };
+            => dataPortNode.AffectedChannels.Count == 1
+                ? dataPortNode.AffectedChannels[0]
+                : throw new InvalidOperationException($"Node '{dataPortNode.Name}' ({dataPortNode.Id}) has more than one affected channel: '{string.Join("', '", dataPortNode.AffectedChannels)}'.");
     }
 }
