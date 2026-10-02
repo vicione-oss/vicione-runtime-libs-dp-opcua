@@ -204,16 +204,18 @@ internal sealed class DataPortNodeManager : NodeManager
         if (!IsInRange(config.MinProperty, config.MaxProperty, value))
             return StatusCodes.BadOutOfRange;
 
-        // A client is free to write without a source timestamp. The variable is stamped with the
-        // moment the write arrived, but the Source timestamp child reports only what the client
-        // actually sent, so the two are carried apart.
+        // The source timestamp follows the clock of the client, which may be off by any amount, so
+        // the value is reported for the moment the write arrived. The Source timestamp child reports
+        // only what the client actually sent, so the two are carried apart. A write without one is
+        // served with the arrival time as its source timestamp.
         var sourceTimestamp = timestamp;
+        var arrived = _timeProvider.GetUtcNow().DateTime;
 
         if (timestamp == DateTime.MinValue)
-            timestamp = _timeProvider.GetUtcNow().DateTime;
+            timestamp = arrived;
 
         foreach (var channel in config.Channels)
-            ReceiveValue?.Invoke(new(channel, value, timestamp, statusCode, sourceTimestamp));
+            ReceiveValue?.Invoke(new(channel, value, arrived, statusCode, sourceTimestamp));
 
         return StatusCodes.Good;
     }
