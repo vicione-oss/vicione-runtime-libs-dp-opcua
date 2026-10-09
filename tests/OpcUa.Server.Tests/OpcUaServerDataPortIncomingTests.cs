@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Loader;
@@ -9,6 +10,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using NSubstitute;
+using Opc.Ua;
 using ViciOne.ManagedEngine.Runtime;
 using Xunit;
 
@@ -328,5 +330,36 @@ public class OpcUaServerDataPortIncoming_ReceiveValue
         received.Should().NotContain(value => value.Channel == "sent");
         received.Should().ContainSingle(value => value.Channel == "value")
             .Which.Timestamp.Should().Be(arrived);
+    }
+}
+
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaServerDataPortIncoming_Received : IAsyncLifetime
+{
+    private readonly SharedOpcUaServer _server = new();
+
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    public ValueTask DisposeAsync() => _server.DisposeAsync();
+
+    /// <summary>
+    /// Every engine names its own channels, so the incoming data ports of two engines on one server
+    /// name a channel the same. A client write reaches the data port of the variable it wrote alone.
+    /// </summary>
+    [Fact]
+    public async Task Raises_a_client_write_on_the_data_port_of_the_written_variable_alone_Async()
+    {
+        var first = await _server.DeployIncomingAsync("first");
+        var second = await _server.DeployIncomingAsync("second");
+        ConcurrentQueue<ExternalValue> firstValues = [];
+        ConcurrentQueue<ExternalValue> secondValues = [];
+        first.Received += values => { foreach (var value in values) firstValues.Enqueue(value); };
+        second.Received += values => { foreach (var value in values) secondValues.Enqueue(value); };
+        await _server.ConnectAsync();
+
+        (await _server.WriteAsync("second.variable", 7d)).Should().Be(StatusCodes.Good);
+
+        secondValues.Should().ContainSingle().Which.Should().Match<ExternalValue>(value => value.Channel == SharedOpcUaServer.Channel && Equals(value.Value, 7d));
+        firstValues.Should().BeEmpty();
     }
 }

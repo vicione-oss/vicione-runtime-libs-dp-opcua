@@ -42,7 +42,7 @@ internal sealed class SharedOpcUaServer : IAsyncDisposable
 
     internal async Task<OpcUaServerDataPortOutgoing> DeployAsync(string engine, double value)
     {
-        OpcUaServerDataPortOutgoing dataPort = new(CreateCommunication(engine), _instanceManager, new FakeLogger<IOpcUaServer>());
+        OpcUaServerDataPortOutgoing dataPort = new(CreateCommunication(engine, readOnly: true), _instanceManager, new FakeLogger<IOpcUaServer>());
         _releases.Add(dataPort, async () =>
         {
             await dataPort.DisconnectAsync(CancellationToken.None);
@@ -51,6 +51,20 @@ internal sealed class SharedOpcUaServer : IAsyncDisposable
 
         await dataPort.ConnectAsync(CancellationToken);
         await SendAsync(dataPort, value);
+
+        return dataPort;
+    }
+
+    internal async Task<OpcUaServerDataPortIncoming> DeployIncomingAsync(string engine)
+    {
+        OpcUaServerDataPortIncoming dataPort = new(CreateCommunication(engine, readOnly: false), _instanceManager, new FakeLogger<IOpcUaServer>());
+        _releases.Add(dataPort, async () =>
+        {
+            await dataPort.DisconnectAsync(CancellationToken.None);
+            await dataPort.DisposeAsync();
+        });
+
+        await dataPort.ConnectAsync(CancellationToken);
 
         return dataPort;
     }
@@ -68,7 +82,7 @@ internal sealed class SharedOpcUaServer : IAsyncDisposable
     /// Every engine serves its data points in a folder of its own, on the same server, and names its
     /// channels as it likes.
     /// </summary>
-    private OpcUaServerDataPortCommunication CreateCommunication(string engine)
+    private OpcUaServerDataPortCommunication CreateCommunication(string engine, bool readOnly)
     {
         Node folder = new() { Id = Guid.NewGuid(), Name = engine, DesignId = OpcUaServerNodeDesignId.Folder };
         Node variable = new()
@@ -80,6 +94,7 @@ internal sealed class SharedOpcUaServer : IAsyncDisposable
             ValueType = typeof(double),
             TransferredChannels = [Channel],
             AffectedChannels = [Channel],
+            Properties = new() { { OpcUaServerDataPortPropertyNames.ReadOnly, new Property { Value = readOnly } } },
         };
 
         OpcUaServerDataPortCommunication communication = new() { Nodes = [folder, variable] };
@@ -145,6 +160,13 @@ internal sealed class SharedOpcUaServer : IAsyncDisposable
     internal async Task<DataValue> ReadAsync(string path)
     {
         var response = await Session.ReadAsync(null, 0, TimestampsToReturn.Both, [new ReadValueId { NodeId = NodeIdOf(path), AttributeId = Attributes.Value }], CancellationToken);
+
+        return response.Results[0];
+    }
+
+    internal async Task<StatusCode> WriteAsync(string path, object value)
+    {
+        var response = await Session.WriteAsync(null, [new WriteValue { NodeId = NodeIdOf(path), AttributeId = Attributes.Value, Value = new DataValue(new Variant(value)) }], CancellationToken);
 
         return response.Results[0];
     }
