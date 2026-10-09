@@ -122,6 +122,8 @@ public class DataPortNodeManager_OnWriteValue
     private const string Channel = "channel";
     private const string SecondChannel = "second channel";
 
+    private static readonly object s_owner = new();
+
     private static readonly DateTime s_writeTimestamp = new(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
 
     [Fact]
@@ -130,7 +132,7 @@ public class DataPortNodeManager_OnWriteValue
         using var manager = CreateNodeManager(typeof(double));
         List<(string Channel, DateTime Timestamp, object Value, StatusCode StatusCode)> received = [];
         manager.ReceiveValue += write => received.Add((write.Channel, write.Timestamp, write.Value, write.StatusCode));
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
 
         var result = Write(node, node, 3.4d);
 
@@ -161,7 +163,7 @@ public class DataPortNodeManager_OnWriteValue
     public void Accepts_a_write_of_the_value_type_of_the_data_point(Type valueType, object value)
     {
         using var manager = CreateNodeManager(valueType);
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
 
         var result = Write(node, node, value);
 
@@ -173,7 +175,7 @@ public class DataPortNodeManager_OnWriteValue
     {
         FakeTimeProvider timeProvider = new(new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero));
         using var manager = CreateNodeManager(typeof(double), timeProvider: timeProvider);
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
         var timestamp = DateTime.MinValue;
 
         var result = Write(node, node, 3.4d, ref timestamp);
@@ -186,7 +188,7 @@ public class DataPortNodeManager_OnWriteValue
     public void Returns_bad_out_of_range_if_the_value_passes_a_maximum_of_another_numeric_type()
     {
         using var manager = CreateNodeManager(typeof(double), maximum: new Property { Value = 2 });
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
 
         var result = Write(node, node, 3.4d);
 
@@ -197,7 +199,7 @@ public class DataPortNodeManager_OnWriteValue
     public void Returns_bad_type_mismatch_if_the_value_does_not_match_the_node_data_type()
     {
         using var manager = CreateNodeManager(typeof(double));
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
 
         var result = Write(node, node, "not a number");
 
@@ -208,7 +210,7 @@ public class DataPortNodeManager_OnWriteValue
     public void Returns_bad_not_type_definition_if_the_node_is_not_a_variable()
     {
         using var manager = CreateNodeManager(typeof(double));
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
         using FolderState folder = new(null) { NodeId = new NodeId("folder", 1) };
 
         var result = Write(node, folder, 3.4d);
@@ -220,7 +222,7 @@ public class DataPortNodeManager_OnWriteValue
     public void Returns_bad_internal_error_if_the_node_has_no_configuration()
     {
         using var manager = CreateNodeManager(typeof(double));
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
         using var unconfigured = CreateVariable(new NodeId("unconfigured", 1));
 
         var result = Write(node, unconfigured, 3.4d);
@@ -232,7 +234,7 @@ public class DataPortNodeManager_OnWriteValue
     public void Returns_bad_internal_error_if_the_node_id_is_not_text()
     {
         using var manager = CreateNodeManager(typeof(double));
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
         using var numeric = CreateVariable(new NodeId(42u, 1));
 
         var result = Write(node, numeric, 3.4d);
@@ -248,7 +250,7 @@ public class DataPortNodeManager_OnWriteValue
         manager.ReceiveValue += write => received.Add((write.Channel, write.Value, write.StatusCode));
 
         var result = WriteThroughStack(
-            manager.GetNodeState(Channel),
+            manager.GetNodeState(s_owner, Channel),
             new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, SourceTimestamp = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc), });
 
         StatusCode.IsGood(result.StatusCode).Should().BeTrue();
@@ -266,7 +268,7 @@ public class DataPortNodeManager_OnWriteValue
         var received = 0;
         manager.ReceiveValue += _ => received++;
 
-        var result = WriteThroughStack(manager.GetNodeState(Channel), new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, });
+        var result = WriteThroughStack(manager.GetNodeState(s_owner, Channel), new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, });
 
         result.StatusCode.Should().Be(new StatusCode(StatusCodes.BadNotWritable));
         received.Should().Be(0);
@@ -284,7 +286,7 @@ public class DataPortNodeManager_OnWriteValue
         var received = 0;
         manager.ReceiveValue += _ => received++;
 
-        var result = WriteThroughStack(manager.GetNodeState(Channel), new DataValue { Value = 3.4d, ServerTimestamp = new DateTime(2026, 3, 4, 5, 6, 8, DateTimeKind.Utc), });
+        var result = WriteThroughStack(manager.GetNodeState(s_owner, Channel), new DataValue { Value = 3.4d, ServerTimestamp = new DateTime(2026, 3, 4, 5, 6, 8, DateTimeKind.Utc), });
 
         result.StatusCode.Should().Be(new StatusCode(StatusCodes.BadWriteNotSupported));
         received.Should().Be(0);
@@ -300,7 +302,7 @@ public class DataPortNodeManager_OnWriteValue
         using var manager = CreateNodeManager(typeof(double), statusCodeChildChannel: SecondChannel);
         List<string> channels = [];
         manager.ReceiveValue += write => channels.Add(write.Channel);
-        var node = manager.GetNodeState(Channel);
+        var node = manager.GetNodeState(s_owner, Channel);
 
         Write(node, node, 3.4d);
 
@@ -355,7 +357,7 @@ public class DataPortNodeManager_OnWriteValue
             TransferredChannels = [Channel, SecondChannel],
             Properties = CreateProperties(minimum, maximum, readOnly),
         };
-        List<INode> route = [folder, variable];
+        List<Node> route = [folder, variable];
 
         if (statusCodeChildChannel is not null)
             route.Add(new Node { Id = Guid.NewGuid(), ParentId = variable.Id, Name = "quality", DesignId = OpcUaServerNodeDesignId.StatusCode, AffectedChannels = [statusCodeChildChannel] });
@@ -364,7 +366,7 @@ public class DataPortNodeManager_OnWriteValue
         server.NamespaceUris.Returns(new NamespaceTable());
         server.DefaultSystemContext.Returns(_ => new ServerSystemContext(server));
 
-        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, [route], "urn:test", timeProvider);
+        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, AddressSpaceLayout.Empty.With(s_owner, route), "urn:test", timeProvider);
         manager.CreateAddressSpace(new Dictionary<NodeId, IList<IReference>>());
 
         return manager;
@@ -389,6 +391,8 @@ public class DataPortNodeManager_CreateAddressSpace
     private const string ValueChannel = "value";
     private const string ChildChannel = "child";
 
+    private static readonly object s_owner = new();
+
     /// <summary>
     /// An envelope child addresses the value of its parent variable, so it is neither a node a
     /// client can browse to nor a channel the server publishes a value on. The engine attributes
@@ -402,9 +406,9 @@ public class DataPortNodeManager_CreateAddressSpace
     {
         using var manager = CreateNodeManager(childDesignId, [ChildChannel]);
 
-        var act = () => manager.GetNodeState(ChildChannel);
+        var act = () => manager.GetNodeState(s_owner, ChildChannel);
 
-        manager.GetNodeState(ValueChannel).BrowseName.Name.Should().Be("variable");
+        manager.GetNodeState(s_owner, ValueChannel).BrowseName.Name.Should().Be("variable");
         act.Should().Throw<InvalidOperationException>().WithMessage($"*{ChildChannel}*");
     }
 
@@ -431,7 +435,7 @@ public class DataPortNodeManager_CreateAddressSpace
     {
         using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel], valueType: valueType);
 
-        manager.GetNodeState(ValueChannel).DataType.Should().Be(new NodeId(dataType));
+        manager.GetNodeState(s_owner, ValueChannel).DataType.Should().Be(new NodeId(dataType));
     }
 
     /// <summary>
@@ -443,7 +447,7 @@ public class DataPortNodeManager_CreateAddressSpace
     {
         using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel], valueType: typeof(Guid[]));
 
-        manager.GetNodeState(ValueChannel).DataType.Should().Be(DataTypeIds.BaseDataType);
+        manager.GetNodeState(s_owner, ValueChannel).DataType.Should().Be(DataTypeIds.BaseDataType);
     }
 
     /// <summary>
@@ -455,8 +459,8 @@ public class DataPortNodeManager_CreateAddressSpace
     {
         using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, ["status-out", "status-in"]);
 
-        var outbound = () => manager.GetNodeState("status-out");
-        var inbound = () => manager.GetNodeState("status-in");
+        var outbound = () => manager.GetNodeState(s_owner, "status-out");
+        var inbound = () => manager.GetNodeState(s_owner, "status-in");
 
         outbound.Should().Throw<InvalidOperationException>();
         inbound.Should().Throw<InvalidOperationException>();
@@ -471,7 +475,7 @@ public class DataPortNodeManager_CreateAddressSpace
     {
         using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel]);
 
-        var accessLevel = manager.GetNodeState(ValueChannel).AccessLevel;
+        var accessLevel = manager.GetNodeState(s_owner, ValueChannel).AccessLevel;
 
         (accessLevel & AccessLevels.StatusWrite).Should().NotBe(0);
         (accessLevel & AccessLevels.TimestampWrite).Should().NotBe(0);
@@ -485,7 +489,7 @@ public class DataPortNodeManager_CreateAddressSpace
     {
         using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel], readOnly: true);
 
-        var accessLevel = manager.GetNodeState(ValueChannel).AccessLevel;
+        var accessLevel = manager.GetNodeState(s_owner, ValueChannel).AccessLevel;
 
         (accessLevel & AccessLevels.CurrentWrite).Should().Be(0);
         (accessLevel & AccessLevels.StatusWrite).Should().Be(0);
@@ -502,7 +506,7 @@ public class DataPortNodeManager_CreateAddressSpace
     {
         using var manager = CreateNodeManager(OpcUaServerNodeDesignId.StatusCode, [ChildChannel], readOnly: null);
 
-        var accessLevel = manager.GetNodeState(ValueChannel).AccessLevel;
+        var accessLevel = manager.GetNodeState(s_owner, ValueChannel).AccessLevel;
 
         (accessLevel & AccessLevels.CurrentWrite).Should().Be(0);
         (accessLevel & AccessLevels.StatusWrite).Should().Be(0);
@@ -545,7 +549,7 @@ public class DataPortNodeManager_CreateAddressSpace
         server.NamespaceUris.Returns(new NamespaceTable());
         server.DefaultSystemContext.Returns(_ => new ServerSystemContext(server));
 
-        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, [[folder, variable, child]], "urn:test");
+        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, AddressSpaceLayout.Empty.With(s_owner, [folder, variable, child]), "urn:test");
         manager.CreateAddressSpace(new Dictionary<NodeId, IList<IReference>>());
 
         return manager;

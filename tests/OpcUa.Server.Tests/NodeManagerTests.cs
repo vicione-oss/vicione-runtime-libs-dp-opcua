@@ -13,6 +13,8 @@ internal static class SingleVariableNodeManager
 {
     internal const string Channel = "value";
 
+    internal static object Owner { get; } = new();
+
     internal static DataPortNodeManager Create()
     {
         Node folder = new() { Id = Guid.NewGuid(), Name = "folder", DesignId = OpcUaServerNodeDesignId.Folder };
@@ -30,7 +32,7 @@ internal static class SingleVariableNodeManager
         server.NamespaceUris.Returns(new NamespaceTable());
         server.DefaultSystemContext.Returns(_ => new ServerSystemContext(server));
 
-        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, [[folder, variable]], "urn:test");
+        DataPortNodeManager manager = new(server, new ApplicationConfiguration { ServerConfiguration = new() }, AddressSpaceLayout.Empty.With(Owner, [folder, variable]), "urn:test");
         manager.CreateAddressSpace(new Dictionary<NodeId, IList<IReference>>());
 
         return manager;
@@ -45,7 +47,7 @@ public class NodeManager_WriteVariableValueAsync
     public async Task Serves_a_linked_status_code_as_it_is_even_on_a_value_that_is_not_a_number_Async()
     {
         using var manager = SingleVariableNodeManager.Create();
-        var variable = manager.GetNodeState(SingleVariableNodeManager.Channel);
+        var variable = manager.GetNodeState(SingleVariableNodeManager.Owner, SingleVariableNodeManager.Channel);
 
         await manager.WriteVariableValueAsync(variable, double.NaN, s_timestamp, StatusCodes.Good, false);
 
@@ -60,7 +62,7 @@ public class NodeManager_WriteVariableValueAsync
     public async Task Keeps_a_linked_status_code_the_value_would_otherwise_clear_Async()
     {
         using var manager = SingleVariableNodeManager.Create();
-        var variable = manager.GetNodeState(SingleVariableNodeManager.Channel);
+        var variable = manager.GetNodeState(SingleVariableNodeManager.Owner, SingleVariableNodeManager.Channel);
 
         await manager.WriteVariableValueAsync(variable, 3.4d, s_timestamp, StatusCodes.BadWaitingForInitialData, false);
 
@@ -71,7 +73,7 @@ public class NodeManager_WriteVariableValueAsync
     public async Task Serves_the_first_value_as_good_when_no_status_code_is_linked_Async()
     {
         using var manager = SingleVariableNodeManager.Create();
-        var variable = manager.GetNodeState(SingleVariableNodeManager.Channel);
+        var variable = manager.GetNodeState(SingleVariableNodeManager.Owner, SingleVariableNodeManager.Channel);
 
         await manager.WriteVariableValueAsync(variable, 3.4d, s_timestamp, null, false);
 
@@ -86,7 +88,7 @@ public class NodeManager_WriteVariableValueAsync
     public async Task Serves_a_value_with_a_bad_status_code_as_none_but_keeps_its_timestamp_Async()
     {
         using var manager = SingleVariableNodeManager.Create();
-        var variable = manager.GetNodeState(SingleVariableNodeManager.Channel);
+        var variable = manager.GetNodeState(SingleVariableNodeManager.Owner, SingleVariableNodeManager.Channel);
         DataValue read = new();
 
         await manager.WriteVariableValueAsync(variable, 4d, s_timestamp, StatusCodes.BadSensorFailure, false);
@@ -105,7 +107,7 @@ public class NodeManager_WriteVariableValueAsync
     public async Task Serves_a_value_that_is_not_a_number_as_good_when_no_status_code_is_linked_Async()
     {
         using var manager = SingleVariableNodeManager.Create();
-        var variable = manager.GetNodeState(SingleVariableNodeManager.Channel);
+        var variable = manager.GetNodeState(SingleVariableNodeManager.Owner, SingleVariableNodeManager.Channel);
 
         await manager.WriteVariableValueAsync(variable, double.NaN, s_timestamp, null, false);
 
@@ -120,7 +122,7 @@ public class NodeManager_UpdateVariableStateAsync
     public async Task Serves_a_linked_status_code_as_it_is_even_on_a_value_that_is_not_a_number_Async()
     {
         using var manager = SingleVariableNodeManager.Create();
-        var variable = manager.GetNodeState(SingleVariableNodeManager.Channel);
+        var variable = manager.GetNodeState(SingleVariableNodeManager.Owner, SingleVariableNodeManager.Channel);
         await manager.WriteVariableValueAsync(variable, double.NaN, new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc), null, false);
 
         await manager.UpdateVariableStateAsync(variable, StatusCodes.Good);

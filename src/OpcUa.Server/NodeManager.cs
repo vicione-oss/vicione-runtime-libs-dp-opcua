@@ -10,38 +10,33 @@ internal class NodeManager(IServerInternal server, ApplicationConfiguration conf
 {
     private readonly SemaphoreSlim _publishSemaphore = new(1, 1);
 
-    protected FolderState CreateFolder(NodeState? parent, string name)
+    // The path is the identifier of the node id. It is passed in rather than built from the names
+    // here, so that the layout, which resolves a client write by it, is the only one to build it.
+    protected FolderState CreateFolder(NodeState? parent, string path, string name)
     {
-        var path = parent is null ? name : $"{parent.NodeId.Identifier}.{name}";
-        QualifiedName browseName = new(name, NamespaceIndex);
-
-        if (parent?.FindChild(null, browseName) is not FolderState folder)
+        FolderState folder = new(parent)
         {
-            folder = new(parent)
-            {
-                SymbolicName = name,
-                ReferenceTypeId = ReferenceTypes.Organizes,
-                TypeDefinitionId = ObjectTypeIds.FolderType,
-                NodeId = new(path, NamespaceIndex),
-                BrowseName = browseName,
-                DisplayName = new("en", name),
-                WriteMask = AttributeWriteMask.None,
-                UserWriteMask = AttributeWriteMask.None,
-                EventNotifier = EventNotifiers.None,
-                Description = new("en", string.Empty),
-                RolePermissions = [],
-                UserRolePermissions = [],
-            };
+            SymbolicName = name,
+            ReferenceTypeId = ReferenceTypes.Organizes,
+            TypeDefinitionId = ObjectTypeIds.FolderType,
+            NodeId = new(path, NamespaceIndex),
+            BrowseName = new(name, NamespaceIndex),
+            DisplayName = new("en", name),
+            WriteMask = AttributeWriteMask.None,
+            UserWriteMask = AttributeWriteMask.None,
+            EventNotifier = EventNotifiers.None,
+            Description = new("en", string.Empty),
+            RolePermissions = [],
+            UserRolePermissions = [],
+        };
 
-            parent?.AddChild(folder);
-        }
+        parent?.AddChild(folder);
 
         return folder;
     }
 
-    protected BaseDataVariableState CreateVariable(NodeState parent, string name, NodeId dataType, int valueRank, bool readOnly, bool historizing)
+    protected BaseDataVariableState CreateVariable(NodeState parent, string path, string name, NodeId dataType, int valueRank, bool readOnly, bool historizing)
     {
-        var path = $"{parent.NodeId.Identifier}.{name}";
         var variable = new BaseDataVariableState(parent)
         {
             TypeDefinitionId = VariableTypeIds.BaseDataVariableType,

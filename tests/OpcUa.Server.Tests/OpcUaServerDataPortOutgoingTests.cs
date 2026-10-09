@@ -270,7 +270,7 @@ public class OpcUaServerDataPortOutgoing_
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportOutgoing, logger);
             await instanceManager.StartOpcUaServer(communication, dataportOutgoing, cancellation.Token);
-            await server.PublishValueAsync("readonly", "value", new DateTime(2023, 11, 20), null, cancellation.Token);
+            await server.PublishValueAsync(dataportOutgoing, "readonly", "value", new DateTime(2023, 11, 20), null, cancellation.Token);
         });
     }
 
@@ -296,7 +296,7 @@ public class OpcUaServerDataPortOutgoing_
         Received.InOrder(async () =>
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportOutgoing, logger);
-            await server.SetNodeStatusAsync("readonly", StatusCodes.Uncertain, cancellation.Token);
+            await server.SetNodeStatusAsync(dataportOutgoing, "readonly", StatusCodes.Uncertain, cancellation.Token);
         });
     }
 }
@@ -349,9 +349,9 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
             ], cancellation.Token);
 
-        await server.DidNotReceive().PublishValueAsync("statusChannel", Arg.Any<object?>(), Arg.Any<DateTime>(), Arg.Any<StatusCode?>(), Arg.Any<CancellationToken>());
-        await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, StatusCodes.Uncertain, cancellation.Token);
-        await server.DidNotReceive().SetNodeStatusAsync(Arg.Any<string>(), Arg.Any<StatusCode>(), Arg.Any<CancellationToken>());
+        await server.DidNotReceive().PublishValueAsync(dataportOutgoing, "statusChannel", Arg.Any<object?>(), Arg.Any<DateTime>(), Arg.Any<StatusCode?>(), Arg.Any<CancellationToken>());
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", s_timestamp, StatusCodes.Uncertain, cancellation.Token);
+        await server.DidNotReceive().SetNodeStatusAsync(dataportOutgoing, Arg.Any<string>(), Arg.Any<StatusCode>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -370,7 +370,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
         await dataportOutgoing.SendAsync(0, [new() { Channel = "statusChannel", Timestamp = s_timestamp, Value = "Uncertain", },], cancellation.Token);
         await dataportOutgoing.SendAsync(1, [new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, StatusCodes.Uncertain, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", s_timestamp, StatusCodes.Uncertain, cancellation.Token);
     }
 
     [Fact]
@@ -389,7 +389,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, StatusCodes.BadInternalError, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", s_timestamp, StatusCodes.BadInternalError, cancellation.Token);
         fakeLogger.Collector.GetSnapshot().Should().ContainSingle(entry =>
             entry.Level == LogLevel.Warning && entry.Message.Contains("'0xZZ'"));
     }
@@ -412,8 +412,8 @@ public class OpcUaServerDataPortOutgoing_SendAsync
         await cancellation.CancelAsync();
         await dataportOutgoing.SendAsync(0, [new() { Channel = channel, Timestamp = s_timestamp, Value = value, },], cancellation.Token);
 
-        await server.DidNotReceive().PublishValueAsync(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<DateTime>(), Arg.Any<StatusCode?>(), Arg.Any<CancellationToken>());
-        await server.DidNotReceive().SetNodeStatusAsync(Arg.Any<string>(), Arg.Any<StatusCode>(), Arg.Any<CancellationToken>());
+        await server.DidNotReceive().PublishValueAsync(dataportOutgoing, Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<DateTime>(), Arg.Any<StatusCode?>(), Arg.Any<CancellationToken>());
+        await server.DidNotReceive().SetNodeStatusAsync(dataportOutgoing, Arg.Any<string>(), Arg.Any<StatusCode>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -432,7 +432,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "value", produced, null, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", produced, null, cancellation.Token);
     }
 
     [Fact]
@@ -452,7 +452,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = 4, },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", 4, produced, StatusCodes.BadSensorFailure, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", 4, produced, StatusCodes.BadSensorFailure, cancellation.Token);
     }
 
     /// <summary>
@@ -472,7 +472,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, null, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", s_timestamp, null, cancellation.Token);
     }
 
     /// <summary>
@@ -501,7 +501,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = later, Value = "later value", },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "later value", later, null, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "later value", later, null, cancellation.Token);
     }
 }
 

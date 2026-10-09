@@ -41,12 +41,10 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
         try
         {
+            // A running server serves the nodes of the data port right away.
             if (_servers.TryGetValue(communication, out var entry))
             {
-                if (entry.HasStarted)
-                    throw new InvalidOperationException($"Cannot add nodes to the OPC UA server at '{communication.Server}:{communication.Port}' because it has already been started. Its address space is built once, when it starts; every data port using this server has to be disposed before another one can be added.");
-
-                entry.Server.AddNodes(communication.Nodes);
+                entry.Server.AddNodes(instance, communication.Nodes);
                 entry.Instances.Add(instance);
 
                 return entry.Server;
@@ -54,7 +52,16 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
             var server = _createServer(communication, logger);
 
-            server.AddNodes(communication.Nodes);
+            try
+            {
+                server.AddNodes(instance, communication.Nodes);
+            }
+            catch
+            {
+                (server as IDisposable)?.Dispose();
+                throw;
+            }
+
             _servers.Add(communication, new(server, logger, [instance]));
 
             return server;
@@ -82,7 +89,6 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
             if (entry.StartedInstances.Count == 0)
                 await entry.Server.StartAsync(cancellationToken).ConfigureAwait(false);
 
-            entry.HasStarted = true;
             entry.StartedInstances.Add(instance);
         }
         finally
@@ -145,7 +151,8 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
             if (!_servers.TryGetValue(communication, out var entry))
                 return;
 
-            entry.Instances.Remove(instance);
+            if (!entry.Instances.Remove(instance))
+                return;
 
             if (entry.Instances.Count == 0)
             {
@@ -156,6 +163,8 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
 
             if (entry.StartedInstances.Remove(instance) && entry.StartedInstances.Count == 0)
                 await StopSafelyAsync(communication, entry, cancellationToken).ConfigureAwait(false);
+
+            RemoveNodesSafely(communication, entry, instance);
         }
         finally
         {
@@ -211,6 +220,21 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
         }
     }
 
+    /// <summary>
+    /// Called from the DisposeAsync of the data port, where a throw breaks the engine teardown.
+    /// </summary>
+    private static void RemoveNodesSafely(OpcUaServerDataPortCommunication communication, ServerInstance entry, object instance)
+    {
+        try
+        {
+            entry.Server.RemoveNodes(instance);
+        }
+        catch (Exception exception)
+        {
+            entry.Logger.LogNodeRemovalFailed(communication.Server, communication.Port, exception);
+        }
+    }
+
     private static void DisposeSafely(OpcUaServerDataPortCommunication communication, ServerInstance entry)
     {
         try
@@ -227,7 +251,6 @@ internal sealed class OpcUaServerInstanceManager : IOpcUaServerInstanceManager, 
     {
         public IOpcUaServer Server { get; init; } = server;
         public ILogger<IOpcUaServer> Logger { get; init; } = logger;
-        public bool HasStarted { get; set; }
         public HashSet<object> StartedInstances { get; init; } = [];
         public List<object> Instances { get; init; } = instances;
     }
