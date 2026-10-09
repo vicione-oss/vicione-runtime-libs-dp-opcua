@@ -128,36 +128,14 @@ public class DataPortNodeManager_OnWriteValue
     public void Publishes_the_written_value_to_every_mapped_channel()
     {
         using var manager = CreateNodeManager(typeof(double));
-        List<(string Channel, object Value)> received = [];
-        manager.ReceiveValue += write => received.Add((write.Channel, write.Value));
+        List<(string Channel, DateTime Timestamp, object Value, StatusCode StatusCode)> received = [];
+        manager.ReceiveValue += write => received.Add((write.Channel, write.Timestamp, write.Value, write.StatusCode));
         var node = manager.GetNodeState(Channel);
 
         var result = Write(node, node, 3.4d);
 
         result.StatusCode.Code.Should().Be(StatusCodes.Good);
-        received.Should().BeEquivalentTo([(Channel, 3.4d), (SecondChannel, 3.4d)]);
-    }
-
-    /// <summary>
-    /// A source timestamp follows the clock of the client that wrote the value, which may be off by
-    /// any amount in either direction. It reaches the engine on its own, beside the value.
-    /// </summary>
-    [Fact]
-    public void Reports_a_written_value_for_the_time_it_arrived_rather_than_its_source_timestamp()
-    {
-        FakeTimeProvider timeProvider = new(new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero));
-        using var manager = CreateNodeManager(typeof(double), timeProvider: timeProvider);
-        List<ReceivedWrite> received = [];
-        manager.ReceiveValue += received.Add;
-        var node = manager.GetNodeState(Channel);
-
-        Write(node, node, 3.4d);
-
-        received.Should().HaveCount(2).And.AllSatisfy(write =>
-        {
-            write.Timestamp.Should().Be(timeProvider.GetUtcNow().DateTime);
-            write.SourceTimestamp.Should().Be(s_writeTimestamp);
-        });
+        received.Should().BeEquivalentTo([(Channel, s_writeTimestamp, 3.4d), (SecondChannel, s_writeTimestamp, 3.4d)]);
     }
 
     public static TheoryData<Type, object> ValuesOfEveryValueType => new()

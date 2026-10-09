@@ -377,7 +377,7 @@ public sealed class OpcUaClient_SubscribeAsync(OpcUaTestSystem opcUa)
             notified.Task.IsCompleted.Should().BeTrue("the server has to publish the value of a monitored item");
             received.SourceTimestamp.Should().NotBe(DateTime.MinValue);
             received.ServerTimestamp.Should().NotBe(DateTime.MinValue);
-            received.Timestamp.Should().Be(received.ServerTimestamp, "the value is reported for the time the server processed it");
+            received.Timestamp.Should().Be(received.SourceTimestamp, "the value is reported for the time it was produced");
         }
         finally
         {

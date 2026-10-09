@@ -8,7 +8,8 @@ namespace ViciOne.Suite.DataPort;
 /// </summary>
 /// <param name="Channel">The channel the variable transfers the value on.</param>
 /// <param name="Value">The value itself.</param>
-/// <param name="Timestamp">The moment the write arrived.</param>
+/// <param name="Timestamp">The point in time the value is for: the source timestamp the client sent,
+/// or the moment the write arrived when it sent none.</param>
 /// <param name="StatusCode">The status the client wrote the value with.</param>
 /// <param name="SourceTimestamp">The source timestamp the client sent, or
 /// <see cref="DateTime.MinValue"/> when it sent none. Kept apart from <paramref name="Timestamp"/>
