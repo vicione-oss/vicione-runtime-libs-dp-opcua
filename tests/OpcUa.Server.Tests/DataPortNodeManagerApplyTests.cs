@@ -187,6 +187,28 @@ public class DataPortNodeManager_Apply
         received.Should().Equal("in");
     }
 
+    /// <summary>
+    /// A client subscribed to the events of the folder of an engine keeps its item across a
+    /// redeploy, so the folder served again reports its events to it.
+    /// </summary>
+    [Fact]
+    public void Moves_the_event_items_of_a_removed_folder_onto_the_folder_served_again()
+    {
+        var layout = AddressSpaceLayout.Empty.With(_running, TestTree.Create("running").WithChannels(Channel));
+        using var manager = CreateNodeManager(layout.With(new object(), TestTree.Create("redeployed").WithChannels(Channel)));
+        var handle = manager.GetManagerHandle(NodeIdOf(manager, "redeployed"));
+        var item = Substitute.For<IEventMonitoredItem>();
+        item.ManagerHandle.Returns(handle);
+        manager.SubscribeToEvents(new OperationContext(new RequestHeader(), RequestType.CreateMonitoredItems), handle, 1, item, false);
+
+        manager.Apply(layout);
+        manager.Apply(layout.With(_deployed, TestTree.Create("redeployed").WithChannels(Channel)));
+
+        var folder = manager.Find(NodeIdOf(manager, "redeployed"));
+        folder.AreEventsMonitored.Should().BeTrue();
+        ((NodeHandle)handle).Node.Should().BeSameAs(folder);
+    }
+
     private static NodeId NodeIdOf(DataPortNodeManager manager, string path)
         => new(path, manager.NamespaceIndex);
 

@@ -139,7 +139,8 @@ internal sealed class DataPortNodeManager : NodeManager
         foreach (var node in removed)
         {
             // The stack keeps the items a client monitors on a node it deletes, and goes on
-            // reporting the last value. The status tells the client the node is gone.
+            // reporting the last value. The status tells the client the node is gone, until a node
+            // at the same path takes the items over.
             if (_nodes[node.Path] is BaseDataVariableState variable)
             {
                 variable.StatusCode = StatusCodes.BadNodeIdUnknown;
@@ -205,7 +206,57 @@ internal sealed class DataPortNodeManager : NodeManager
         foreach (var nodeState in topmost)
             AddPredefinedNode(SystemContext, nodeState);
 
+        foreach (var node in added)
+            TakeOverMonitoredItems(_nodes[node.Path]);
+
         return rootFolders;
+    }
+
+    /// <summary>
+    /// Moves the items a client still monitors on a removed node with the same node id onto
+    /// <paramref name="nodeState"/>, and reports its value to them. The stack binds an item to the
+    /// node it monitors once, and binds every item created later for the same node id to that node
+    /// as well, so without this a client subscribed across a redeploy would never see the values
+    /// of the new node.
+    /// </summary>
+    private void TakeOverMonitoredItems(NodeState nodeState)
+    {
+        if (!MonitoredNodes.TryGetValue(nodeState.NodeId, out var monitoredNode))
+            return;
+
+        monitoredNode.Node.OnStateChanged = null;
+        monitoredNode.Node.OnReportEvent = null;
+        monitoredNode.Node = nodeState;
+
+        // Each item marks the node it monitors the way subscribing it did, so a later unsubscribe
+        // releases the node served now.
+        if (monitoredNode.EventMonitoredItems is { } eventItems)
+        {
+            nodeState.OnReportEvent = monitoredNode.OnReportEvent;
+
+            foreach (var item in eventItems)
+            {
+                MoveHandle(item, nodeState);
+                nodeState.SetAreEventsMonitored(SystemContext, true, true);
+            }
+        }
+
+        if (monitoredNode.DataChangeMonitoredItems is { } dataChangeItems)
+        {
+            nodeState.OnStateChanged = monitoredNode.OnMonitoredNodeChanged;
+
+            foreach (var item in dataChangeItems)
+            {
+                MoveHandle(item, nodeState);
+                monitoredNode.QueueValue(SystemContext, nodeState, item);
+            }
+        }
+    }
+
+    private static void MoveHandle(IMonitoredItem item, NodeState nodeState)
+    {
+        if (item.ManagerHandle is NodeHandle handle)
+            handle.Node = nodeState;
     }
 
     /// <summary>
