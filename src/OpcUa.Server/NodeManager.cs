@@ -89,11 +89,8 @@ internal class NodeManager(IServerInternal server, ApplicationConfiguration conf
     private static object? GetDefault(Type type)
         => type == null ? null : type.IsValueType ? Activator.CreateInstance(type) : null;
 
-    protected static bool IsNaN(object value)
-        => (value is double dvalue && double.IsNaN(dvalue)) || (value is float fvalue && float.IsNaN(fvalue));
-
     /// <summary>
-    /// Serves a variable with the status linked to it, as it is, also while its value is not a number.
+    /// Serves a variable with the status linked to it, as it is.
     /// </summary>
     public async Task UpdateVariableStateAsync(BaseDataVariableState variable, StatusCode statusCode)
     {
@@ -112,9 +109,8 @@ internal class NodeManager(IServerInternal server, ApplicationConfiguration conf
     }
 
     /// <summary>
-    /// Serves a value with the status linked to it, as it is. Without one, a value that is not a
-    /// number marks the variable as waiting for its initial data, and the next value that is clears
-    /// that again.
+    /// Serves a value with the status linked to it, as it is. Without one, the first value clears the
+    /// status the variable waits for its initial data with.
     /// </summary>
     public async Task<bool> WriteVariableValueAsync(BaseDataVariableState variable, object? value, DateTime timeStamp, StatusCode? statusCode, bool writeOnlyChanged)
     {
@@ -137,10 +133,6 @@ internal class NodeManager(IServerInternal server, ApplicationConfiguration conf
             if (statusCode is { } linkedStatusCode)
             {
                 variable.StatusCode = linkedStatusCode;
-            }
-            else if (IsNaN(value))
-            {
-                variable.StatusCode = StatusCodes.BadWaitingForInitialData;
             }
             else if (variable.StatusCode == StatusCodes.BadWaitingForInitialData)
             {

@@ -13,11 +13,19 @@ internal sealed class DataPortNodeManager : NodeManager
     private static readonly Dictionary<Type, NodeId> s_dataTypeMapping = new()
     {
         { typeof(bool), DataTypeIds.Boolean },
+        { typeof(sbyte), DataTypeIds.SByte },
+        { typeof(byte), DataTypeIds.Byte },
+        { typeof(short), DataTypeIds.Int16 },
+        { typeof(ushort), DataTypeIds.UInt16 },
         { typeof(int), DataTypeIds.Int32 },
+        { typeof(uint), DataTypeIds.UInt32 },
         { typeof(long), DataTypeIds.Int64 },
+        { typeof(ulong), DataTypeIds.UInt64 },
         { typeof(string), DataTypeIds.String },
         { typeof(float), DataTypeIds.Float },
         { typeof(double), DataTypeIds.Double },
+        { typeof(DateTime), DataTypeIds.DateTime },
+        { typeof(byte[]), DataTypeIds.ByteString },
     };
 
     private readonly Dictionary<string, (BaseDataVariableState Node, List<string> Channels, Property? MinProperty, Property? MaxProperty)> _nodesConfiguration = [];
@@ -177,7 +185,7 @@ internal sealed class DataPortNodeManager : NodeManager
     }
 
     private static NodeId GetDatatypeId(Type? valueType)
-        => s_dataTypeMapping.TryGetValue(valueType ?? typeof(object), out var valueTypeId) ? valueTypeId : DataTypeIds.DataValue;
+        => s_dataTypeMapping.TryGetValue(valueType ?? typeof(object), out var valueTypeId) ? valueTypeId : DataTypeIds.BaseDataType;
 
     private ServiceResult OnWriteValue(ISystemContext context, NodeState node, NumericRange indexRange, QualifiedName dataEncoding,
         ref object value, ref StatusCode statusCode, ref DateTime timestamp)

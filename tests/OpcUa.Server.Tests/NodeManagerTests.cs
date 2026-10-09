@@ -78,16 +78,39 @@ public class NodeManager_WriteVariableValueAsync
         variable.StatusCode.Should().Be(new StatusCode(StatusCodes.Good));
     }
 
+    /// <summary>
+    /// OPC UA serves no value with a Bad status, so the stack reads the value as null. The source
+    /// timestamp is served all the same.
+    /// </summary>
     [Fact]
-    public async Task Serves_a_value_that_is_not_a_number_as_waiting_for_initial_data_when_no_status_code_is_linked_Async()
+    public async Task Serves_a_value_with_a_bad_status_code_as_none_but_keeps_its_timestamp_Async()
+    {
+        using var manager = SingleVariableNodeManager.Create();
+        var variable = manager.GetNodeState(SingleVariableNodeManager.Channel);
+        DataValue read = new();
+
+        await manager.WriteVariableValueAsync(variable, 4d, s_timestamp, StatusCodes.BadSensorFailure, false);
+        variable.ReadAttribute(manager.SystemContext, Attributes.Value, NumericRange.Empty, null, read);
+
+        read.Value.Should().BeNull();
+        read.StatusCode.Should().Be(new StatusCode(StatusCodes.BadSensorFailure));
+        read.SourceTimestamp.Should().Be(s_timestamp);
+    }
+
+    /// <summary>
+    /// Not a number is a value of a float and a double like any other. A Bad status would make the
+    /// stack serve it as no value at all.
+    /// </summary>
+    [Fact]
+    public async Task Serves_a_value_that_is_not_a_number_as_good_when_no_status_code_is_linked_Async()
     {
         using var manager = SingleVariableNodeManager.Create();
         var variable = manager.GetNodeState(SingleVariableNodeManager.Channel);
 
-        await manager.WriteVariableValueAsync(variable, 3.4d, s_timestamp, null, false);
         await manager.WriteVariableValueAsync(variable, double.NaN, s_timestamp, null, false);
 
-        variable.StatusCode.Should().Be(new StatusCode(StatusCodes.BadWaitingForInitialData));
+        variable.StatusCode.Should().Be(new StatusCode(StatusCodes.Good));
+        variable.Value.Should().Be(double.NaN);
     }
 }
 
