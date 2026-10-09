@@ -28,6 +28,31 @@ Neither property is declared in `OpcUaServer.yaml`, so the configuration editor 
 and a configuration has to set them by hand. That is the position the `Status` property sat in until
 it became the `Status code` envelope child, which the ruleset does declare.
 
+### Several engines on one server
+
+Every data port whose communication settings are equal shares one server, also across engines,
+as long as the engines load dp-opcua in the same load context. The engine host reuses a context
+only for an equal set of packages or a subset of one, so an engine with a different set gets a
+server of its own, and whichever of the two starts second fails to bind the port.
+The server runs while any of them is connected. A data port that is created while the server runs
+has its nodes added to the address space right away, and a data port that is released has its
+nodes removed; the sessions of the clients and the nodes of every other data port stay as they
+are. A client monitoring a removed variable is told `BadNodeIdUnknown`, and keeps its items:
+they report the variable again once a redeployed engine serves it.
+
+The node id of a node is the path of names down to it, so the data ports have to agree on what
+each path is:
+
+- A folder is shared by every data port that names it.
+- A data point is shared only by the data ports of one configuration, which carry it under the
+  same id. A data point of another configuration at the same path is refused, since serving both
+  from one variable would mix their values.
+- A client write is raised only by the incoming data port the written data point belongs to, so
+  two engines may name their channels the same.
+
+Data ports whose communication settings differ in anything but their nodes get servers of their
+own, and the second of them fails to start if both use the same port.
+
 ## Envelope children
 
 A data point may carry child nodes that address the OPC UA value of their parent rather than a node
