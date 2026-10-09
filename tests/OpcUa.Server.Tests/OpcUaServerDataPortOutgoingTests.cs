@@ -576,4 +576,41 @@ public sealed class OpcUaServerDataPortOutgoing_DisposeAsync : IAsyncLifetime
         (await _server.ReadAsync("redeployed.variable")).Value.Should().Be(4d);
         (await _server.ReadAsync("running.variable")).Value.Should().Be(1d);
     }
+
+    /// <summary>
+    /// A client keeps its subscription while an engine is redeployed, and is told the variable is
+    /// gone in between.
+    /// </summary>
+    [Fact]
+    public async Task Reports_the_values_of_a_redeployed_engine_to_a_subscription_kept_across_the_redeploy_Async()
+    {
+        await _server.DeployAsync("running", 1d);
+        var redeployed = await _server.DeployAsync("redeployed", 2d);
+        await _server.ConnectAsync();
+        var values = await _server.MonitorAsync("redeployed.variable");
+
+        await _server.ReleaseAsync(redeployed);
+        await values.WaitForAsync(value => value.StatusCode == StatusCodes.BadNodeIdUnknown);
+        var deployed = await _server.DeployAsync("redeployed", 4d);
+
+        (await values.WaitForAsync(value => Equals(value.Value, 4d))).StatusCode.Should().Be(StatusCodes.Good);
+        await SharedOpcUaServer.SendAsync(deployed, 5d);
+        (await values.WaitForAsync(value => Equals(value.Value, 5d))).StatusCode.Should().Be(StatusCodes.Good);
+    }
+
+    [Fact]
+    public async Task Reports_the_values_of_a_redeployed_engine_to_a_new_subscription_while_an_old_one_is_open_Async()
+    {
+        await _server.DeployAsync("running", 1d);
+        var redeployed = await _server.DeployAsync("redeployed", 2d);
+        await _server.ConnectAsync();
+        await _server.MonitorAsync("redeployed.variable");
+
+        await _server.ReleaseAsync(redeployed);
+        var deployed = await _server.DeployAsync("redeployed", 4d);
+        var values = await _server.MonitorAsync("redeployed.variable");
+        await SharedOpcUaServer.SendAsync(deployed, 5d);
+
+        (await values.WaitForAsync(value => Equals(value.Value, 5d))).StatusCode.Should().Be(StatusCodes.Good);
+    }
 }
