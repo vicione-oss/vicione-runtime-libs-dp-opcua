@@ -90,13 +90,15 @@ public class OpcUaServerInstanceManager_
             return server;
         });
 
-        var server1 = instanceManager.GetOrRegisterOpcUaServer(communication1, new(), _logger);
-        var server2 = instanceManager.GetOrRegisterOpcUaServer(communication2, new(), _logger);
+        var instance1 = new object();
+        var instance2 = new object();
+        var server1 = instanceManager.GetOrRegisterOpcUaServer(communication1, instance1, _logger);
+        var server2 = instanceManager.GetOrRegisterOpcUaServer(communication2, instance2, _logger);
 
         server1.Should().BeSameAs(server2);
         server1.Should().Be(server);
-        server.Received().AddNodes(nodes1);
-        server.Received().AddNodes(nodes2);
+        server.Received().AddNodes(instance1, nodes1);
+        server.Received().AddNodes(instance2, nodes2);
     }
 
     [Fact]
@@ -382,6 +384,67 @@ public class OpcUaServerInstanceManager_ReleaseOpcUaServerAsync
         logger.LatestRecord.Level.Should().Be(LogLevel.Error);
         logger.LatestRecord.Message.Should().Match("*localhost:55555*");
     }
+
+    /// <summary>
+    /// Redeploying one engine releases its data ports while the data ports of the other engines
+    /// keep the server running, so their nodes are all that is left to serve.
+    /// </summary>
+    [Fact]
+    public async Task Removes_the_nodes_of_a_released_data_port_while_another_one_remains_Async()
+    {
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+        var releasedInstance = new object();
+        var remainingInstance = new object();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, releasedInstance, new FakeLogger<IOpcUaServer>());
+        instanceManager.GetOrRegisterOpcUaServer(communication, remainingInstance, new FakeLogger<IOpcUaServer>());
+        await instanceManager.StartOpcUaServer(communication, releasedInstance, TestContext.Current.CancellationToken);
+        await instanceManager.StartOpcUaServer(communication, remainingInstance, TestContext.Current.CancellationToken);
+        await instanceManager.ReleaseOpcUaServerAsync(communication, releasedInstance, TestContext.Current.CancellationToken);
+
+        server.Received(1).RemoveNodes(releasedInstance);
+        server.DidNotReceive().RemoveNodes(remainingInstance);
+        ((IDisposable)server).DidNotReceive().Dispose();
+    }
+
+    [Fact]
+    public async Task Does_not_remove_the_nodes_of_a_data_port_that_is_not_registered_Async()
+    {
+        var server = Substitute.For<IOpcUaServer>();
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new();
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, new object(), new FakeLogger<IOpcUaServer>());
+        instanceManager.GetOrRegisterOpcUaServer(communication, new object(), new FakeLogger<IOpcUaServer>());
+        await instanceManager.ReleaseOpcUaServerAsync(communication, new object(), TestContext.Current.CancellationToken);
+
+        server.DidNotReceiveWithAnyArgs().RemoveNodes(default!);
+    }
+
+    [Fact]
+    public async Task Releases_a_data_port_whose_nodes_cannot_be_removed_Async()
+    {
+        FakeLogger<IOpcUaServer> logger = new();
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+        var releasedInstance = new object();
+        var remainingInstance = new object();
+        server.When(s => s.RemoveNodes(releasedInstance)).Do(_ => throw new InvalidOperationException("Removal failed."));
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, releasedInstance, logger);
+        instanceManager.GetOrRegisterOpcUaServer(communication, remainingInstance, logger);
+
+        await instanceManager.Awaiting(manager => manager.ReleaseOpcUaServerAsync(communication, releasedInstance, TestContext.Current.CancellationToken))
+            .Should().NotThrowAsync();
+
+        logger.LatestRecord.Level.Should().Be(LogLevel.Error);
+        logger.LatestRecord.Message.Should().Match("*localhost:55555*");
+        await instanceManager.ReleaseOpcUaServerAsync(communication, remainingInstance, TestContext.Current.CancellationToken);
+        ((IDisposable)server).Received(1).Dispose();
+    }
 }
 
 public class OpcUaServerInstanceManager_GetOrRegisterOpcUaServer
@@ -401,40 +464,86 @@ public class OpcUaServerInstanceManager_GetOrRegisterOpcUaServer
             .WithMessage("*OpcUaServerInstanceManager*");
     }
 
+    /// <summary>
+    /// Several engines may serve their data points on one server, so a data port created while
+    /// another one keeps the server running has its nodes added to the running server.
+    /// </summary>
     [Fact]
-    public async Task Names_the_started_server_a_further_data_port_cannot_register_with_Async()
+    public async Task Adds_the_nodes_of_a_further_data_port_to_a_running_server_Async()
     {
         var server = Substitute.For<IOpcUaServer>();
         await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        List<Node> nodes = [];
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
-
+        OpcUaServerDataPortCommunication furtherCommunication = new() { Server = "localhost", Port = 55555, Nodes = nodes };
         var instanceHandle = new object();
+        var furtherInstanceHandle = new object();
 
         instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
         await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
 
-        var register = () => instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
+        var registered = instanceManager.GetOrRegisterOpcUaServer(furtherCommunication, furtherInstanceHandle, new FakeLogger<IOpcUaServer>());
 
-        register.Should().Throw<InvalidOperationException>()
-            .WithMessage("*localhost:55555*already been started*disposed*");
+        registered.Should().BeSameAs(server);
+        server.Received(1).AddNodes(furtherInstanceHandle, nodes);
     }
 
     [Fact]
-    public async Task Refuses_a_further_data_port_after_the_server_was_started_and_stopped_Async()
+    public async Task Adds_the_nodes_of_a_further_data_port_after_the_server_was_started_and_stopped_Async()
     {
         var server = Substitute.For<IOpcUaServer>();
         await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
         OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
         var instanceHandle = new object();
+        var furtherInstanceHandle = new object();
 
         instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
         await instanceManager.StartOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
         await instanceManager.StopOpcUaServer(communication, instanceHandle, TestContext.Current.CancellationToken);
 
+        var registered = instanceManager.GetOrRegisterOpcUaServer(communication, furtherInstanceHandle, new FakeLogger<IOpcUaServer>());
+
+        registered.Should().BeSameAs(server);
+        server.Received(1).AddNodes(furtherInstanceHandle, communication.Nodes);
+    }
+
+    /// <summary>
+    /// A data port whose nodes cannot be served fails to be created, so the engine never disposes
+    /// it. Keeping it registered would keep the server alive after every other data port is gone.
+    /// </summary>
+    [Fact]
+    public async Task Does_not_register_a_data_port_whose_nodes_cannot_be_served_Async()
+    {
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+        var instanceHandle = new object();
+        var refusedInstanceHandle = new object();
+        server.When(s => s.AddNodes(refusedInstanceHandle, Arg.Any<IReadOnlyCollection<Node>>()))
+            .Do(_ => throw new InvalidOperationException("The data point 'folder.variable' is already served."));
+
+        instanceManager.GetOrRegisterOpcUaServer(communication, instanceHandle, new FakeLogger<IOpcUaServer>());
+        var register = () => instanceManager.GetOrRegisterOpcUaServer(communication, refusedInstanceHandle, new FakeLogger<IOpcUaServer>());
+
+        register.Should().Throw<InvalidOperationException>().WithMessage("*folder.variable*");
+
+        await instanceManager.ReleaseOpcUaServerAsync(communication, instanceHandle, TestContext.Current.CancellationToken);
+        ((IDisposable)server).Received(1).Dispose();
+    }
+
+    [Fact]
+    public async Task Disposes_a_new_server_whose_nodes_cannot_be_served_Async()
+    {
+        var server = Substitute.For<IOpcUaServer, IDisposable>();
+        server.When(s => s.AddNodes(Arg.Any<object>(), Arg.Any<IReadOnlyCollection<Node>>()))
+            .Do(_ => throw new InvalidOperationException("Node design id 'unknown' is not supported."));
+        await using OpcUaServerInstanceManager instanceManager = new((_, _) => server);
+        OpcUaServerDataPortCommunication communication = new() { Server = "localhost", Port = 55555 };
+
         var register = () => instanceManager.GetOrRegisterOpcUaServer(communication, new(), new FakeLogger<IOpcUaServer>());
 
-        register.Should().Throw<InvalidOperationException>()
-            .WithMessage("*localhost:55555*already been started*disposed*");
+        register.Should().Throw<InvalidOperationException>();
+        ((IDisposable)server).Received(1).Dispose();
     }
 }
 

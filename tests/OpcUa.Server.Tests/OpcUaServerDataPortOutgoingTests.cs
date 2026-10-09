@@ -270,7 +270,7 @@ public class OpcUaServerDataPortOutgoing_
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportOutgoing, logger);
             await instanceManager.StartOpcUaServer(communication, dataportOutgoing, cancellation.Token);
-            await server.PublishValueAsync("readonly", "value", new DateTime(2023, 11, 20), null, cancellation.Token);
+            await server.PublishValueAsync(dataportOutgoing, "readonly", "value", new DateTime(2023, 11, 20), null, cancellation.Token);
         });
     }
 
@@ -296,7 +296,7 @@ public class OpcUaServerDataPortOutgoing_
         Received.InOrder(async () =>
         {
             instanceManager.GetOrRegisterOpcUaServer(communication, dataportOutgoing, logger);
-            await server.SetNodeStatusAsync("readonly", StatusCodes.Uncertain, cancellation.Token);
+            await server.SetNodeStatusAsync(dataportOutgoing, "readonly", StatusCodes.Uncertain, cancellation.Token);
         });
     }
 }
@@ -349,9 +349,9 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
             ], cancellation.Token);
 
-        await server.DidNotReceive().PublishValueAsync("statusChannel", Arg.Any<object?>(), Arg.Any<DateTime>(), Arg.Any<StatusCode?>(), Arg.Any<CancellationToken>());
-        await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, StatusCodes.Uncertain, cancellation.Token);
-        await server.DidNotReceive().SetNodeStatusAsync(Arg.Any<string>(), Arg.Any<StatusCode>(), Arg.Any<CancellationToken>());
+        await server.DidNotReceive().PublishValueAsync(dataportOutgoing, "statusChannel", Arg.Any<object?>(), Arg.Any<DateTime>(), Arg.Any<StatusCode?>(), Arg.Any<CancellationToken>());
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", s_timestamp, StatusCodes.Uncertain, cancellation.Token);
+        await server.DidNotReceive().SetNodeStatusAsync(dataportOutgoing, Arg.Any<string>(), Arg.Any<StatusCode>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -370,7 +370,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
         await dataportOutgoing.SendAsync(0, [new() { Channel = "statusChannel", Timestamp = s_timestamp, Value = "Uncertain", },], cancellation.Token);
         await dataportOutgoing.SendAsync(1, [new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, StatusCodes.Uncertain, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", s_timestamp, StatusCodes.Uncertain, cancellation.Token);
     }
 
     [Fact]
@@ -389,7 +389,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, StatusCodes.BadInternalError, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", s_timestamp, StatusCodes.BadInternalError, cancellation.Token);
         fakeLogger.Collector.GetSnapshot().Should().ContainSingle(entry =>
             entry.Level == LogLevel.Warning && entry.Message.Contains("'0xZZ'"));
     }
@@ -412,8 +412,8 @@ public class OpcUaServerDataPortOutgoing_SendAsync
         await cancellation.CancelAsync();
         await dataportOutgoing.SendAsync(0, [new() { Channel = channel, Timestamp = s_timestamp, Value = value, },], cancellation.Token);
 
-        await server.DidNotReceive().PublishValueAsync(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<DateTime>(), Arg.Any<StatusCode?>(), Arg.Any<CancellationToken>());
-        await server.DidNotReceive().SetNodeStatusAsync(Arg.Any<string>(), Arg.Any<StatusCode>(), Arg.Any<CancellationToken>());
+        await server.DidNotReceive().PublishValueAsync(dataportOutgoing, Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<DateTime>(), Arg.Any<StatusCode?>(), Arg.Any<CancellationToken>());
+        await server.DidNotReceive().SetNodeStatusAsync(dataportOutgoing, Arg.Any<string>(), Arg.Any<StatusCode>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -432,7 +432,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "value", produced, null, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", produced, null, cancellation.Token);
     }
 
     [Fact]
@@ -452,7 +452,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = 4, },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", 4, produced, StatusCodes.BadSensorFailure, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", 4, produced, StatusCodes.BadSensorFailure, cancellation.Token);
     }
 
     /// <summary>
@@ -472,7 +472,7 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = s_timestamp, Value = "value", },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "value", s_timestamp, null, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "value", s_timestamp, null, cancellation.Token);
     }
 
     /// <summary>
@@ -501,6 +501,116 @@ public class OpcUaServerDataPortOutgoing_SendAsync
                 new() { Channel = "readonly", Timestamp = later, Value = "later value", },
             ], cancellation.Token);
 
-        await server.Received(1).PublishValueAsync("readonly", "later value", later, null, cancellation.Token);
+        await server.Received(1).PublishValueAsync(dataportOutgoing, "readonly", "later value", later, null, cancellation.Token);
+    }
+}
+
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaServerDataPortOutgoing_ConnectAsync : IAsyncLifetime
+{
+    private readonly SharedOpcUaServer _server = new();
+
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    public ValueTask DisposeAsync() => _server.DisposeAsync();
+
+    [Fact]
+    public async Task Serves_an_engine_deployed_beside_a_running_one_without_dropping_the_client_Async()
+    {
+        var running = await _server.DeployAsync("running", 1d);
+        await _server.ConnectAsync();
+        var runningValues = await _server.MonitorAsync("running.variable");
+        var sessionId = _server.Session.SessionId;
+
+        await _server.DeployAsync("deployed", 2d);
+        await SharedOpcUaServer.SendAsync(running, 3d);
+
+        (await _server.BrowseObjectsAsync()).Should().Contain(["running", "deployed"]);
+        (await _server.ReadAsync("deployed.variable")).Value.Should().Be(2d);
+        (await runningValues.WaitForAsync(value => Equals(value.Value, 3d))).StatusCode.Should().Be(StatusCodes.Good);
+        _server.Session.Connected.Should().BeTrue();
+        _server.Session.SessionId.Should().Be(sessionId);
+    }
+}
+
+/// <summary>
+/// Redeploying an engine disposes its data ports and creates them again, while the other engines
+/// keep the server running.
+/// </summary>
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaServerDataPortOutgoing_DisposeAsync : IAsyncLifetime
+{
+    private readonly SharedOpcUaServer _server = new();
+
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    public ValueTask DisposeAsync() => _server.DisposeAsync();
+
+    [Fact]
+    public async Task Removes_the_nodes_of_a_released_engine_and_keeps_serving_the_others_Async()
+    {
+        var running = await _server.DeployAsync("running", 1d);
+        var released = await _server.DeployAsync("released", 2d);
+        await _server.ConnectAsync();
+        var releasedValues = await _server.MonitorAsync("released.variable");
+
+        await _server.ReleaseAsync(released);
+        await SharedOpcUaServer.SendAsync(running, 3d);
+
+        (await _server.BrowseObjectsAsync()).Should().Contain("running").And.NotContain("released");
+        (await _server.ReadAsync("released.variable")).StatusCode.Should().Be(StatusCodes.BadNodeIdUnknown);
+        (await _server.ReadAsync("running.variable")).Value.Should().Be(3d);
+        await releasedValues.WaitForAsync(value => value.StatusCode == StatusCodes.BadNodeIdUnknown);
+    }
+
+    [Fact]
+    public async Task Serves_a_redeployed_engine_again_Async()
+    {
+        await _server.DeployAsync("running", 1d);
+        var redeployed = await _server.DeployAsync("redeployed", 2d);
+        await _server.ConnectAsync();
+
+        await _server.ReleaseAsync(redeployed);
+        await _server.DeployAsync("redeployed", 4d);
+
+        (await _server.ReadAsync("redeployed.variable")).Value.Should().Be(4d);
+        (await _server.ReadAsync("running.variable")).Value.Should().Be(1d);
+    }
+
+    /// <summary>
+    /// A client keeps its subscription while an engine is redeployed, and is told the variable is
+    /// gone in between.
+    /// </summary>
+    [Fact]
+    public async Task Reports_the_values_of_a_redeployed_engine_to_a_subscription_kept_across_the_redeploy_Async()
+    {
+        await _server.DeployAsync("running", 1d);
+        var redeployed = await _server.DeployAsync("redeployed", 2d);
+        await _server.ConnectAsync();
+        var values = await _server.MonitorAsync("redeployed.variable");
+
+        await _server.ReleaseAsync(redeployed);
+        await values.WaitForAsync(value => value.StatusCode == StatusCodes.BadNodeIdUnknown);
+        var deployed = await _server.DeployAsync("redeployed", 4d);
+
+        (await values.WaitForAsync(value => Equals(value.Value, 4d))).StatusCode.Should().Be(StatusCodes.Good);
+        await SharedOpcUaServer.SendAsync(deployed, 5d);
+        (await values.WaitForAsync(value => Equals(value.Value, 5d))).StatusCode.Should().Be(StatusCodes.Good);
+    }
+
+    [Fact]
+    public async Task Reports_the_values_of_a_redeployed_engine_to_a_new_subscription_while_an_old_one_is_open_Async()
+    {
+        await _server.DeployAsync("running", 1d);
+        var redeployed = await _server.DeployAsync("redeployed", 2d);
+        await _server.ConnectAsync();
+        await _server.MonitorAsync("redeployed.variable");
+
+        await _server.ReleaseAsync(redeployed);
+        var deployed = await _server.DeployAsync("redeployed", 4d);
+        var values = await _server.MonitorAsync("redeployed.variable");
+        await SharedOpcUaServer.SendAsync(deployed, 5d);
+
+        (await values.WaitForAsync(value => Equals(value.Value, 5d))).StatusCode.Should().Be(StatusCodes.Good);
     }
 }

@@ -51,6 +51,16 @@
           "Castle.Core": "5.1.1"
         }
       },
+      "OPCFoundation.NetStandard.Opc.Ua.Client": {
+        "type": "Direct",
+        "requested": "[1.5.375.457, )",
+        "resolved": "1.5.375.457",
+        "contentHash": "wzc7Jx7GVnxM3lPQpZaU4C+u13Jm5Rg/DRGdTJIFQCTW8M6C8J0CNU2f+9wcY4ajGYhD/cbBGy9tIIwf8hPpGA==",
+        "dependencies": {
+          "OPCFoundation.NetStandard.Opc.Ua.Configuration": "1.5.375.457",
+          "OPCFoundation.NetStandard.Opc.Ua.Core": "1.5.375.457"
+        }
+      },
       "ViciOne.ManagedEngine": {
         "type": "Direct",
         "requested": "[1.0.0, )",

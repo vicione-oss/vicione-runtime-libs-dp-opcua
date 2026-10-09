@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -16,44 +16,62 @@ namespace ViciOne.Suite.DataPort;
 internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication, ILogger<IOpcUaServer> logger, TimeProvider? timeProvider = null) : StandardServer, IOpcUaServer
 {
     private readonly OpcUaServerDataPortProperties _properties = new(communication);
-    private readonly Dictionary<Guid, Node> _nodes = [];
     private readonly LoginAttemptTracker _loginAttemptTracker = new(timeProvider);
+    private AddressSpaceLayout _layout = AddressSpaceLayout.Empty;
     private DataPortNodeManager? _nodeManager;
 
-    public event Action<ReceivedWrite> ReceiveValue
+    // Kept apart from the node manager, which only exists while the server runs and is replaced by
+    // every start, so a data port receives its writes across a restart of the server.
+    private readonly ConcurrentDictionary<object, Action<ReceivedWrite>> _writeReceivers = new(ReferenceEqualityComparer.Instance);
+
+    // Set while the server runs, so a changed layout reaches the address space clients browse. A
+    // stopped server keeps its node manager until the next start replaces it with a new one.
+    private bool _isRunning;
+
+    public void ReceiveWrites(object owner, Action<ReceivedWrite> receiver)
+        => _writeReceivers[owner] = receiver;
+
+    public void StopReceivingWrites(object owner)
+        => _writeReceivers.TryRemove(owner, out _);
+
+    /// <summary>
+    /// Hands a write to the data port its channel belongs to, which is the only one to hear it.
+    /// </summary>
+    internal void RouteWrite(object owner, ReceivedWrite write)
     {
-        add
-        {
-            if (_nodeManager is null)
-                throw new InvalidOperationException("Node manager is not initialized.");
-
-            _nodeManager.ReceiveValue += value;
-        }
-
-        remove
-        {
-            if (_nodeManager is null)
-                throw new InvalidOperationException("Node manager is not initialized.");
-
-            _nodeManager.ReceiveValue -= value;
-        }
+        if (_writeReceivers.TryGetValue(owner, out var receiver))
+            receiver(write);
     }
 
-    public void AddNodes(IReadOnlyCollection<Node> nodes)
+    public void AddNodes(object owner, IReadOnlyCollection<Node> nodes)
     {
-        if (_nodeManager is not null)
-            throw new InvalidOperationException("Cannot add nodes after the server has been started. The address space is built once, at start.");
+        AddressSpaceLayout layout;
 
-        foreach (var node in nodes)
+        try
         {
-            if (_nodes.TryGetValue(node.Id, out var existingNode))
-            {
-                existingNode.TransferredChannels.AddRange(node.TransferredChannels.Except(existingNode.TransferredChannels));
-                existingNode.AffectedChannels.AddRange(node.AffectedChannels.Except(existingNode.AffectedChannels));
-                continue;
-            }
-            _nodes.Add(node.Id, node);
+            layout = _layout.With(owner, nodes);
         }
+        catch (InvalidOperationException exception)
+        {
+            throw new InvalidOperationException($"Cannot serve the nodes of this data port on the OPC UA server at '{communication.Server}:{communication.Port}'. {exception.Message}", exception);
+        }
+
+        Apply(layout);
+    }
+
+    public void RemoveNodes(object owner)
+        => Apply(_layout.Without(owner));
+
+    /// <summary>
+    /// A server that is not running serves the layout once it starts. A running one changes its
+    /// address space right away, without dropping the sessions of its clients.
+    /// </summary>
+    private void Apply(AddressSpaceLayout layout)
+    {
+        if (_isRunning)
+            _nodeManager?.Apply(layout);
+
+        _layout = layout;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -68,6 +86,8 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
 
         if (_nodeManager is null)
             throw new InvalidOperationException("Server did not initialize correctly.");
+
+        _isRunning = true;
     }
 
     internal void LogInsecureConfigurationWarnings()
@@ -90,28 +110,31 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
         if (Utils.Logger == logger)
             Utils.SetLogger(new TraceEventLogger());
 
+        // A stop that fails leaves the server running, and the data ports with it, so the nodes of
+        // a data port registered after it still have to reach the address space.
         Stop();
+        _isRunning = false;
 
         return Task.CompletedTask;
     }
 
-    public async Task PublishValueAsync(string channel, object? value, DateTime timestamp, StatusCode? statusCode, CancellationToken cancellationToken)
+    public async Task PublishValueAsync(object owner, string channel, object? value, DateTime timestamp, StatusCode? statusCode, CancellationToken cancellationToken)
     {
         if (_nodeManager is null)
             throw new InvalidOperationException("Node manager is not initialized.");
 
-        var node = _nodeManager.GetNodeState(channel);
+        var node = _nodeManager.GetNodeState(owner, channel);
 
         if (!await _nodeManager.WriteVariableValueAsync(node, value, timestamp, statusCode, false))
             throw new InvalidOperationException($"Failed to send '{value}' to node with id '{node.NodeId.Identifier}'.");
     }
 
-    public async Task SetNodeStatusAsync(string channel, StatusCode statusCode, CancellationToken cancellationToken)
+    public async Task SetNodeStatusAsync(object owner, string channel, StatusCode statusCode, CancellationToken cancellationToken)
     {
         if (_nodeManager is null)
             throw new InvalidOperationException("Node manager is not initialized.");
 
-        var node = _nodeManager.GetNodeState(channel);
+        var node = _nodeManager.GetNodeState(owner, channel);
 
         await _nodeManager.UpdateVariableStateAsync(node, statusCode);
     }
@@ -127,7 +150,8 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
 
     protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
     {
-        _nodeManager = new(server, configuration, _nodes.Values.GetRoutes(), _properties.Namespace);
+        _nodeManager = new(server, configuration, _layout, _properties.Namespace);
+        _nodeManager.ReceiveValue += RouteWrite;
         return new MasterNodeManager(server, configuration, null, _nodeManager);
     }
 

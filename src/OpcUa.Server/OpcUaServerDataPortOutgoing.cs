@@ -160,7 +160,7 @@ public sealed class OpcUaServerDataPortOutgoing : IExternalOutgoingCommunication
             if (cancellationToken.IsCancellationRequested)
                 return;
 
-            await _server.PublishValueAsync(servedValue.Channel, servedValue.Value, servedValue.SourceTimestamp, servedValue.StatusCode, cancellationToken);
+            await _server.PublishValueAsync(this, servedValue.Channel, servedValue.Value, servedValue.SourceTimestamp, servedValue.StatusCode, cancellationToken);
         }
     }
 
@@ -171,7 +171,7 @@ public sealed class OpcUaServerDataPortOutgoing : IExternalOutgoingCommunication
             if (cancellationToken.IsCancellationRequested)
                 return;
 
-            await _server.SetNodeStatusAsync(channel, statusCode, cancellationToken);
+            await _server.SetNodeStatusAsync(this, channel, statusCode, cancellationToken);
         }
     }
 

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Testing;
 using Opc.Ua;
@@ -93,4 +95,46 @@ public class OpcUaServer_AreCredentialsValid
 
         result.Should().BeFalse();
     }
+}
+
+public class OpcUaServer_RouteWrite
+{
+    private static readonly ReceivedWrite s_write = new("value", 3.4d, new DateTime(2026, 10, 9), StatusCodes.Good, new DateTime(2026, 10, 9));
+
+    /// <summary>
+    /// Every engine names its own channels, so two data ports on one server may name a channel the
+    /// same. A write reaches the data port its variable belongs to and no other.
+    /// </summary>
+    [Fact]
+    public void Hands_a_write_to_the_data_port_it_belongs_to_alone()
+    {
+        using var server = CreateServer();
+        object owner = new();
+        List<ReceivedWrite> owned = [];
+        List<ReceivedWrite> other = [];
+        server.ReceiveWrites(owner, owned.Add);
+        server.ReceiveWrites(new object(), other.Add);
+
+        server.RouteWrite(owner, s_write);
+
+        owned.Should().Equal(s_write);
+        other.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Hands_no_write_to_a_data_port_that_stopped_receiving()
+    {
+        using var server = CreateServer();
+        object owner = new();
+        List<ReceivedWrite> received = [];
+        server.ReceiveWrites(owner, received.Add);
+
+        server.StopReceivingWrites(owner);
+        server.RouteWrite(owner, s_write);
+
+        received.Should().BeEmpty();
+    }
+
+    private static OpcUaServer CreateServer()
+        => new(new OpcUaServerDataPortCommunication { Nodes = [] }, new FakeLogger<IOpcUaServer>());
 }

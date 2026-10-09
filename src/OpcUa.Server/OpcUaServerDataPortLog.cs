@@ -57,4 +57,7 @@ internal static partial class OpcUaServerDataPortLog
 
     [LoggerMessage(16, LogLevel.Warning, "Ignoring the stop of the OPC UA server at '{Server}:{Port}' by a data port that is not one of those keeping it running. The data ports that started it are still using the server.")]
     internal static partial void LogStopByDataPortThatIsNotKeepingItRunning(this ILogger logger, string server, int port);
+
+    [LoggerMessage(17, LogLevel.Error, "Cannot remove the nodes of a released data port from the OPC UA server at '{Server}:{Port}'. Clients may still browse to them.")]
+    internal static partial void LogNodeRemovalFailed(this ILogger logger, string server, int port, Exception exception);
 }
