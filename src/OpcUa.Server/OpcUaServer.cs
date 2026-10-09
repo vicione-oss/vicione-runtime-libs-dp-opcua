@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Security.Cryptography;
@@ -19,27 +20,27 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
     private AddressSpaceLayout _layout = AddressSpaceLayout.Empty;
     private DataPortNodeManager? _nodeManager;
 
+    // Kept apart from the node manager, which only exists while the server runs and is replaced by
+    // every start, so a data port receives its writes across a restart of the server.
+    private readonly ConcurrentDictionary<object, Action<ReceivedWrite>> _writeReceivers = new(ReferenceEqualityComparer.Instance);
+
     // Set while the server runs, so a changed layout reaches the address space clients browse. A
     // stopped server keeps its node manager until the next start replaces it with a new one.
     private bool _isRunning;
 
-    public event Action<ReceivedWrite> ReceiveValue
+    public void ReceiveWrites(object owner, Action<ReceivedWrite> receiver)
+        => _writeReceivers[owner] = receiver;
+
+    public void StopReceivingWrites(object owner)
+        => _writeReceivers.TryRemove(owner, out _);
+
+    /// <summary>
+    /// Hands a write to the data port its channel belongs to, which is the only one to hear it.
+    /// </summary>
+    internal void RouteWrite(object owner, ReceivedWrite write)
     {
-        add
-        {
-            if (_nodeManager is null)
-                throw new InvalidOperationException("Node manager is not initialized.");
-
-            _nodeManager.ReceiveValue += value;
-        }
-
-        remove
-        {
-            if (_nodeManager is null)
-                throw new InvalidOperationException("Node manager is not initialized.");
-
-            _nodeManager.ReceiveValue -= value;
-        }
+        if (_writeReceivers.TryGetValue(owner, out var receiver))
+            receiver(write);
     }
 
     public void AddNodes(object owner, IReadOnlyCollection<Node> nodes)
@@ -150,6 +151,7 @@ internal sealed class OpcUaServer(OpcUaServerDataPortCommunication communication
     protected override MasterNodeManager CreateMasterNodeManager(IServerInternal server, ApplicationConfiguration configuration)
     {
         _nodeManager = new(server, configuration, _layout, _properties.Namespace);
+        _nodeManager.ReceiveValue += RouteWrite;
         return new MasterNodeManager(server, configuration, null, _nodeManager);
     }
 

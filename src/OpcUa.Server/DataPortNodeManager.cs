@@ -37,7 +37,10 @@ internal sealed class DataPortNodeManager : NodeManager
     // replaces it as a whole instead of changing it in place.
     private volatile ServedVariables _served;
 
-    public event Action<ReceivedWrite>? ReceiveValue;
+    /// <summary>
+    /// Raised for every channel a client write reaches, with the data port the channel belongs to.
+    /// </summary>
+    public event Action<object, ReceivedWrite>? ReceiveValue;
 
     [SuppressMessage("Style", "IDE0290:Primären Konstruktor verwenden")]
     public DataPortNodeManager(IServerInternal server, ApplicationConfiguration configuration, AddressSpaceLayout layout, string @namespace, TimeProvider? timeProvider = null)
@@ -317,10 +320,10 @@ internal sealed class DataPortNodeManager : NodeManager
         if (timestamp == DateTime.MinValue)
             timestamp = _timeProvider.GetUtcNow().DateTime;
 
-        foreach (var channels in served.Channels.Values)
+        foreach (var (owner, channels) in served.Channels)
         {
             foreach (var channel in channels)
-                ReceiveValue?.Invoke(new(channel, value, timestamp, statusCode, sourceTimestamp));
+                ReceiveValue?.Invoke(owner, new(channel, value, timestamp, statusCode, sourceTimestamp));
         }
 
         return StatusCodes.Good;

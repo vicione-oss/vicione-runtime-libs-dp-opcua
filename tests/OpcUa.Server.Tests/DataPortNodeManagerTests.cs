@@ -131,7 +131,7 @@ public class DataPortNodeManager_OnWriteValue
     {
         using var manager = CreateNodeManager(typeof(double));
         List<(string Channel, DateTime Timestamp, object Value, StatusCode StatusCode)> received = [];
-        manager.ReceiveValue += write => received.Add((write.Channel, write.Timestamp, write.Value, write.StatusCode));
+        manager.ReceiveValue += (_, write) => received.Add((write.Channel, write.Timestamp, write.Value, write.StatusCode));
         var node = manager.GetNodeState(s_owner, Channel);
 
         var result = Write(node, node, 3.4d);
@@ -247,7 +247,7 @@ public class DataPortNodeManager_OnWriteValue
     {
         using var manager = CreateNodeManager(typeof(double));
         List<(string Channel, object Value, StatusCode StatusCode)> received = [];
-        manager.ReceiveValue += write => received.Add((write.Channel, write.Value, write.StatusCode));
+        manager.ReceiveValue += (_, write) => received.Add((write.Channel, write.Value, write.StatusCode));
 
         var result = WriteThroughStack(
             manager.GetNodeState(s_owner, Channel),
@@ -266,7 +266,7 @@ public class DataPortNodeManager_OnWriteValue
     {
         using var manager = CreateNodeManager(typeof(double), readOnly: true);
         var received = 0;
-        manager.ReceiveValue += _ => received++;
+        manager.ReceiveValue += (_, _) => received++;
 
         var result = WriteThroughStack(manager.GetNodeState(s_owner, Channel), new DataValue { Value = 3.4d, StatusCode = StatusCodes.BadCommunicationError, });
 
@@ -284,7 +284,7 @@ public class DataPortNodeManager_OnWriteValue
     {
         using var manager = CreateNodeManager(typeof(double));
         var received = 0;
-        manager.ReceiveValue += _ => received++;
+        manager.ReceiveValue += (_, _) => received++;
 
         var result = WriteThroughStack(manager.GetNodeState(s_owner, Channel), new DataValue { Value = 3.4d, ServerTimestamp = new DateTime(2026, 3, 4, 5, 6, 8, DateTimeKind.Utc), });
 
@@ -301,7 +301,7 @@ public class DataPortNodeManager_OnWriteValue
     {
         using var manager = CreateNodeManager(typeof(double), statusCodeChildChannel: SecondChannel);
         List<string> channels = [];
-        manager.ReceiveValue += write => channels.Add(write.Channel);
+        manager.ReceiveValue += (_, write) => channels.Add(write.Channel);
         var node = manager.GetNodeState(s_owner, Channel);
 
         Write(node, node, 3.4d);

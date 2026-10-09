@@ -16,7 +16,6 @@ public sealed class OpcUaServerDataPortIncoming : IExternalIncomingCommunication
     private readonly OpcUaServerDataPortCommunication _communication;
     private readonly EnvelopeChildren _envelopeChildren;
     private readonly IOpcUaServer _server;
-    private bool _subscribed;
 
     public event Action<IReadOnlyCollection<ExternalValue>>? Received;
 
@@ -40,22 +39,12 @@ public sealed class OpcUaServerDataPortIncoming : IExternalIncomingCommunication
     {
         await _instanceManager.StartOpcUaServer(_communication, this, cancellationToken).ConfigureAwait(false);
 
-        if (_subscribed)
-            return;
-
-        _server.ReceiveValue += ReceiveValue;
-        _subscribed = true;
+        _server.ReceiveWrites(this, ReceiveValue);
     }
 
     public async Task DisconnectAsync(CancellationToken cancellationToken)
     {
-        // The server only carries subscribers once it has started, so unsubscribing after a failed
-        // connect throws and would keep the teardown from ever reaching the stop below.
-        if (_subscribed)
-        {
-            _server.ReceiveValue -= ReceiveValue;
-            _subscribed = false;
-        }
+        _server.StopReceivingWrites(this);
 
         await _instanceManager.StopOpcUaServer(_communication, this, cancellationToken).ConfigureAwait(false);
     }
@@ -74,5 +63,11 @@ public sealed class OpcUaServerDataPortIncoming : IExternalIncomingCommunication
             serverTimestamp: DateTime.MinValue));
 
     public async ValueTask DisposeAsync()
-        => await _instanceManager.ReleaseOpcUaServerAsync(_communication, this, CancellationToken.None).ConfigureAwait(false);
+    {
+        // The engine disposes a data port without disconnecting it first when a teardown, a stop
+        // or a deploy fails, and the server outlives the port while other engines keep using it.
+        _server.StopReceivingWrites(this);
+
+        await _instanceManager.ReleaseOpcUaServerAsync(_communication, this, CancellationToken.None).ConfigureAwait(false);
+    }
 }

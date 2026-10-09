@@ -12,7 +12,16 @@ namespace ViciOne.Suite.DataPort;
 /// </remarks>
 internal interface IOpcUaServer
 {
-    event Action<ReceivedWrite> ReceiveValue;
+    /// <summary>
+    /// Hands the values clients write to the variables of <paramref name="owner"/> to
+    /// <paramref name="receiver"/>, in place of the receiver it registered before.
+    /// </summary>
+    void ReceiveWrites(object owner, Action<ReceivedWrite> receiver);
+
+    /// <summary>
+    /// Stops handing the writes of <paramref name="owner"/> to its receiver, if it registered one.
+    /// </summary>
+    void StopReceivingWrites(object owner);
 
     /// <summary>
     /// Serves the nodes of <paramref name="owner"/> beside the ones the server already serves,

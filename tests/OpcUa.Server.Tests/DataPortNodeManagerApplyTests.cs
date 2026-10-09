@@ -168,6 +168,24 @@ public class DataPortNodeManager_Apply
         manager.Find(NodeIdOf(manager, "deployed.variable")).Should().BeSameAs(variable);
     }
 
+    /// <summary>
+    /// Every engine names its own channels, so a write to the variable of one is raised for that
+    /// data port alone, even where another names a channel the same.
+    /// </summary>
+    [Fact]
+    public void Raises_a_client_write_for_the_data_port_its_variable_belongs_to()
+    {
+        var layout = AddressSpaceLayout.Empty.With(_running, TestTree.Create("running").WithChannels(Channel));
+        using var manager = CreateNodeManager(layout);
+        manager.Apply(layout.With(_deployed, TestTree.Create("deployed").WithChannels(Channel)));
+        List<(object Owner, string Channel)> received = [];
+        manager.ReceiveValue += (owner, write) => received.Add((owner, write.Channel));
+
+        Write(manager.GetNodeState(_deployed, Channel), 3.4d);
+
+        received.Should().Equal((_deployed, Channel));
+    }
+
     [Fact]
     public void Raises_no_client_write_for_a_released_data_port_that_shared_the_variable()
     {
@@ -179,12 +197,12 @@ public class DataPortNodeManager_Apply
         var variable = manager.GetNodeState(_running, "in");
 
         manager.Apply(layout.Without(_deployed));
-        List<string> received = [];
-        manager.ReceiveValue += write => received.Add(write.Channel);
+        List<(object Owner, string Channel)> received = [];
+        manager.ReceiveValue += (owner, write) => received.Add((owner, write.Channel));
         Write(variable, 3.4d);
 
         manager.GetNodeState(_running, "in").Should().BeSameAs(variable);
-        received.Should().Equal("in");
+        received.Should().Equal((_running, "in"));
     }
 
     /// <summary>

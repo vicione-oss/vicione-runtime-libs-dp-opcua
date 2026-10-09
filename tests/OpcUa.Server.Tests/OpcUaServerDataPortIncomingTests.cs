@@ -16,6 +16,28 @@ using Xunit;
 
 namespace ViciOne.Suite.DataPort;
 
+internal static class WriteRouting
+{
+    /// <summary>
+    /// Lets a server substitute route a write the way the server does, to the receiver its owner
+    /// registered and to no other.
+    /// </summary>
+    internal static Action<object, ReceivedWrite> RouteWrites(this IOpcUaServer server)
+    {
+        Dictionary<object, Action<ReceivedWrite>> receivers = new(ReferenceEqualityComparer.Instance);
+        server.When(s => s.ReceiveWrites(Arg.Any<object>(), Arg.Any<Action<ReceivedWrite>>()))
+            .Do(call => receivers[call.ArgAt<object>(0)] = call.ArgAt<Action<ReceivedWrite>>(1));
+        server.When(s => s.StopReceivingWrites(Arg.Any<object>()))
+            .Do(call => receivers.Remove(call.ArgAt<object>(0)));
+
+        return (owner, write) =>
+        {
+            if (receivers.TryGetValue(owner, out var receiver))
+                receiver(write);
+        };
+    }
+}
+
 public class OpcUaServerDataPortIncoming_
 {
     private static OpcUaServerDataPortCommunication CreateCommunication(IReadOnlyCollection<Node>? nodes = default, Action<OpcUaServerDataPortProperties>? configure = default)
@@ -76,8 +98,6 @@ public class OpcUaServerDataPortIncoming_
         var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
         var server = Substitute.For<IOpcUaServer>();
         var logger = Substitute.For<ILogger<IOpcUaServer>>();
-        server.When(s => s.ReceiveValue -= Arg.Any<Action<ReceivedWrite>>())
-            .Do(_ => throw new InvalidOperationException("Node manager is not initialized."));
         instanceManager.GetOrRegisterOpcUaServer(Arg.Any<OpcUaServerDataPortCommunication>(), Arg.Any<object>(), Arg.Any<ILogger<IOpcUaServer>>()).Returns(server);
         await using OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, logger);
 
@@ -93,6 +113,7 @@ public class OpcUaServerDataPortIncoming_
 
         var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
         var server = Substitute.For<IOpcUaServer>();
+        var routeWrite = server.RouteWrites();
         instanceManager.GetOrRegisterOpcUaServer(Arg.Any<OpcUaServerDataPortCommunication>(), Arg.Any<object>(), Arg.Any<ILogger<IOpcUaServer>>()).Returns(server);
         await using OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
         var deliveries = 0;
@@ -101,7 +122,31 @@ public class OpcUaServerDataPortIncoming_
         await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
         await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
         await dataPortIncoming.DisconnectAsync(TestContext.Current.CancellationToken);
-        server.ReceiveValue += Raise.Event<Action<ReceivedWrite>>(new ReceivedWrite("channel", "value", new DateTime(2026, 8, 21), Opc.Ua.StatusCodes.Good, new DateTime(2026, 8, 21)));
+        routeWrite(dataPortIncoming, new ReceivedWrite("channel", "value", new DateTime(2026, 8, 21), Opc.Ua.StatusCodes.Good, new DateTime(2026, 8, 21)));
+
+        deliveries.Should().Be(0);
+    }
+
+    /// <summary>
+    /// The engine disposes a connected data port without a disconnect when a teardown fails, while
+    /// the server goes on serving the data ports of other engines.
+    /// </summary>
+    [Fact]
+    public async Task Stops_receiving_values_once_disposed_without_a_disconnect_Async()
+    {
+        var communication = CreateCommunication();
+
+        var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
+        var server = Substitute.For<IOpcUaServer>();
+        var routeWrite = server.RouteWrites();
+        instanceManager.GetOrRegisterOpcUaServer(Arg.Any<OpcUaServerDataPortCommunication>(), Arg.Any<object>(), Arg.Any<ILogger<IOpcUaServer>>()).Returns(server);
+        OpcUaServerDataPortIncoming dataPortIncoming = new(communication, instanceManager, new FakeLogger<IOpcUaServer>());
+        var deliveries = 0;
+        dataPortIncoming.Received += _ => deliveries++;
+
+        await dataPortIncoming.ConnectAsync(TestContext.Current.CancellationToken);
+        await dataPortIncoming.DisposeAsync();
+        routeWrite(dataPortIncoming, new ReceivedWrite("channel", "value", new DateTime(2026, 10, 9), Opc.Ua.StatusCodes.Good, new DateTime(2026, 10, 9)));
 
         deliveries.Should().Be(0);
     }
@@ -166,6 +211,7 @@ public class OpcUaServerDataPortIncoming_
 
         var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
         var server = Substitute.For<IOpcUaServer>();
+        var routeWrite = server.RouteWrites();
         var logger = Substitute.For<ILogger<IOpcUaServer>>();
         using CancellationTokenSource cancellation = new();
         instanceManager.GetOrRegisterOpcUaServer(communication, Arg.Any<OpcUaServerDataPortIncoming>(), logger).Returns(server);
@@ -178,7 +224,7 @@ public class OpcUaServerDataPortIncoming_
             hasBeenCalled = e.Any(v => ((string)(v.Value ?? string.Empty)) == "value" && v.Timestamp == new DateTime(2023, 11, 20));
         };
 
-        server.ReceiveValue += Raise.Event<Action<ReceivedWrite>>(new ReceivedWrite("writeable", "value", new DateTime(2023, 11, 20), Opc.Ua.StatusCodes.Good, new DateTime(2023, 11, 20)));
+        routeWrite(dataportIncoming, new ReceivedWrite("writeable", "value", new DateTime(2023, 11, 20), Opc.Ua.StatusCodes.Good, new DateTime(2023, 11, 20)));
 
         hasBeenCalled.Should().BeTrue();
     }
@@ -257,6 +303,7 @@ public class OpcUaServerDataPortIncoming_ReceiveValue
         var written = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
         var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
         var server = Substitute.For<IOpcUaServer>();
+        var routeWrite = server.RouteWrites();
         var logger = Substitute.For<ILogger<IOpcUaServer>>();
         instanceManager.GetOrRegisterOpcUaServer(communication, Arg.Any<OpcUaServerDataPortIncoming>(), logger).Returns(server);
         using CancellationTokenSource cancellation = new();
@@ -266,7 +313,7 @@ public class OpcUaServerDataPortIncoming_ReceiveValue
         dataportIncoming.Received += values => received = values;
 
         await dataportIncoming.ConnectAsync(cancellation.Token);
-        server.ReceiveValue += Raise.Event<Action<ReceivedWrite>>(new ReceivedWrite("value", 42, written, Opc.Ua.StatusCodes.Good, written));
+        routeWrite(dataportIncoming, new ReceivedWrite("value", 42, written, Opc.Ua.StatusCodes.Good, written));
 
         received.Should().ContainSingle(value => value.Channel == "value")
             .Which.Should().Match<ExternalValue>(value => Equals(value.Value, 42) && value.Timestamp == written);
@@ -281,6 +328,7 @@ public class OpcUaServerDataPortIncoming_ReceiveValue
         var written = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
         var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
         var server = Substitute.For<IOpcUaServer>();
+        var routeWrite = server.RouteWrites();
         var logger = Substitute.For<ILogger<IOpcUaServer>>();
         instanceManager.GetOrRegisterOpcUaServer(communication, Arg.Any<OpcUaServerDataPortIncoming>(), logger).Returns(server);
         using CancellationTokenSource cancellation = new();
@@ -290,8 +338,7 @@ public class OpcUaServerDataPortIncoming_ReceiveValue
         dataportIncoming.Received += values => received = values;
 
         await dataportIncoming.ConnectAsync(cancellation.Token);
-        server.ReceiveValue += Raise.Event<Action<ReceivedWrite>>(
-            new ReceivedWrite("value", 42, written, Opc.Ua.StatusCodes.UncertainLastUsableValue, written));
+        routeWrite(dataportIncoming, new ReceivedWrite("value", 42, written, Opc.Ua.StatusCodes.UncertainLastUsableValue, written));
 
         received.Should().SatisfyRespectively(
             value => value.Channel.Should().Be("value"),
@@ -315,6 +362,7 @@ public class OpcUaServerDataPortIncoming_ReceiveValue
         var arrived = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
         var instanceManager = Substitute.For<IOpcUaServerInstanceManager>();
         var server = Substitute.For<IOpcUaServer>();
+        var routeWrite = server.RouteWrites();
         var logger = Substitute.For<ILogger<IOpcUaServer>>();
         instanceManager.GetOrRegisterOpcUaServer(communication, Arg.Any<OpcUaServerDataPortIncoming>(), logger).Returns(server);
         using CancellationTokenSource cancellation = new();
@@ -324,8 +372,7 @@ public class OpcUaServerDataPortIncoming_ReceiveValue
         dataportIncoming.Received += values => received = values;
 
         await dataportIncoming.ConnectAsync(cancellation.Token);
-        server.ReceiveValue += Raise.Event<Action<ReceivedWrite>>(
-            new ReceivedWrite("value", 42, arrived, Opc.Ua.StatusCodes.Good, DateTime.MinValue));
+        routeWrite(dataportIncoming, new ReceivedWrite("value", 42, arrived, Opc.Ua.StatusCodes.Good, DateTime.MinValue));
 
         received.Should().NotContain(value => value.Channel == "sent");
         received.Should().ContainSingle(value => value.Channel == "value")
