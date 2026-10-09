@@ -14,6 +14,7 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
     <PackageReference Include="NSubstitute" />
+    <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" />
     <PackageReference Include="ViciOne.ManagedEngine" />
     <PackageReference Include="ViciOne.Tree.Builder" />
     <PackageReference Include="xunit.v3.mtp-v2" />

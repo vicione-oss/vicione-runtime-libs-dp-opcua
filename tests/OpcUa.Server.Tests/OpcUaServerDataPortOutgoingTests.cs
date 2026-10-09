@@ -504,3 +504,76 @@ public class OpcUaServerDataPortOutgoing_SendAsync
         await server.Received(1).PublishValueAsync("readonly", "later value", later, null, cancellation.Token);
     }
 }
+
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaServerDataPortOutgoing_ConnectAsync : IAsyncLifetime
+{
+    private readonly SharedOpcUaServer _server = new();
+
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    public ValueTask DisposeAsync() => _server.DisposeAsync();
+
+    [Fact]
+    public async Task Serves_an_engine_deployed_beside_a_running_one_without_dropping_the_client_Async()
+    {
+        var running = await _server.DeployAsync("running", 1d);
+        await _server.ConnectAsync();
+        var runningValues = await _server.MonitorAsync("running.variable");
+        var sessionId = _server.Session.SessionId;
+
+        await _server.DeployAsync("deployed", 2d);
+        await SharedOpcUaServer.SendAsync(running, 3d);
+
+        (await _server.BrowseObjectsAsync()).Should().Contain(["running", "deployed"]);
+        (await _server.ReadAsync("deployed.variable")).Value.Should().Be(2d);
+        (await runningValues.WaitForAsync(value => Equals(value.Value, 3d))).StatusCode.Should().Be(StatusCodes.Good);
+        _server.Session.Connected.Should().BeTrue();
+        _server.Session.SessionId.Should().Be(sessionId);
+    }
+}
+
+/// <summary>
+/// Redeploying an engine disposes its data ports and creates them again, while the other engines
+/// keep the server running.
+/// </summary>
+[Trait("Category", "Interoperability")]
+public sealed class OpcUaServerDataPortOutgoing_DisposeAsync : IAsyncLifetime
+{
+    private readonly SharedOpcUaServer _server = new();
+
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    public ValueTask DisposeAsync() => _server.DisposeAsync();
+
+    [Fact]
+    public async Task Removes_the_nodes_of_a_released_engine_and_keeps_serving_the_others_Async()
+    {
+        var running = await _server.DeployAsync("running", 1d);
+        var released = await _server.DeployAsync("released", 2d);
+        await _server.ConnectAsync();
+        var releasedValues = await _server.MonitorAsync("released.variable");
+
+        await _server.ReleaseAsync(released);
+        await SharedOpcUaServer.SendAsync(running, 3d);
+
+        (await _server.BrowseObjectsAsync()).Should().Contain("running").And.NotContain("released");
+        (await _server.ReadAsync("released.variable")).StatusCode.Should().Be(StatusCodes.BadNodeIdUnknown);
+        (await _server.ReadAsync("running.variable")).Value.Should().Be(3d);
+        await releasedValues.WaitForAsync(value => value.StatusCode == StatusCodes.BadNodeIdUnknown);
+    }
+
+    [Fact]
+    public async Task Serves_a_redeployed_engine_again_Async()
+    {
+        await _server.DeployAsync("running", 1d);
+        var redeployed = await _server.DeployAsync("redeployed", 2d);
+        await _server.ConnectAsync();
+
+        await _server.ReleaseAsync(redeployed);
+        await _server.DeployAsync("redeployed", 4d);
+
+        (await _server.ReadAsync("redeployed.variable")).Value.Should().Be(4d);
+        (await _server.ReadAsync("running.variable")).Value.Should().Be(1d);
+    }
+}
